@@ -251,8 +251,7 @@ struct footpath_builder {
       utl::erase_duplicates(
           s->equivalent_,
           [](auto const& a, auto const& b) { return a->index_ < b->index_; },
-          [](auto const& a, auto const& b) { return a->index_ == b->index_;
-          });
+          [](auto const& a, auto const& b) { return a->index_ == b->index_; });
     }
   }
 
