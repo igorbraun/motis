@@ -6,6 +6,8 @@
 #include <random>
 #include <vector>
 
+#include "fmt/format.h"
+
 #include "utl/concat.h"
 #include "utl/equal_ranges.h"
 #include "utl/erase_duplicates.h"
@@ -25,7 +27,7 @@ using namespace motis::logging;
 namespace motis::path {
 
 std::vector<station_seq> load_station_sequences(
-    motis::loader::Schedule const* sched) {
+    motis::loader::Schedule const* sched, std::string const& prefix) {
   scoped_timer timer("loading station sequences");
 
   auto const& mapping = loader::class_mapping();
@@ -36,7 +38,10 @@ std::vector<station_seq> load_station_sequences(
     auto& seq = utl::get_or_create(seqs, service->route(), [&] {
       station_seq seq;
       for (auto const& station : *service->route()->stations()) {
-        seq.station_ids_.emplace_back(station->id()->str());
+        seq.station_ids_.emplace_back(
+            prefix.empty()
+                ? station->id()->str()
+                : fmt::format("{}_{}", prefix, station->id()->str()));
         seq.station_names_.emplace_back(station->name()->str());
 
         // broken data is broken

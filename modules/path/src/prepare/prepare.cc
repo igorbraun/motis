@@ -10,8 +10,10 @@
 
 #include "geo/polygon.h"
 
+#include "utl/concat.h"
 #include "utl/erase_if.h"
 #include "utl/verify.h"
+#include "utl/zip.h"
 
 #include "motis/core/common/logging.h"
 
@@ -113,7 +115,17 @@ void prepare(prepare_settings const& opt) {
   auto progress_tracker = utl::get_active_progress_tracker();
 
   progress_tracker->status("Load Station Sequences").out_bounds(0, 5);
-  auto sequences = schedule_wrapper{opt.schedule_}.load_station_sequences();
+  std::vector<station_seq> sequences;
+  if (opt.schedules_.size() == 1 && opt.prefixes_.empty()) {
+    sequences = schedule_wrapper{opt.schedules_[0]}.load_station_sequences("");
+  } else {
+    for (auto const& [sched, prefix] :
+         utl::zip(opt.schedules_, opt.prefixes_)) {
+      utl::concat(sequences,
+                  schedule_wrapper{sched}.load_station_sequences(prefix));
+    }
+  }
+
   filter_sequences(opt.filter_, sequences);
   auto stations = collect_stations(sequences);
 

@@ -37,7 +37,8 @@ struct station_seq {
   std::set<motis_clasz_t> classes_;
 };
 
-std::vector<station_seq> load_station_sequences(motis::loader::Schedule const*);
+std::vector<station_seq> load_station_sequences(motis::loader::Schedule const*,
+                                                std::string const& prefix);
 
 }  // namespace path
 }  // namespace motis

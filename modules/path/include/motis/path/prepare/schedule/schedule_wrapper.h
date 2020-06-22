@@ -13,7 +13,8 @@ namespace motis::path {
 struct schedule_wrapper {
   explicit schedule_wrapper(std::string const& schedule_path);
 
-  std::vector<station_seq> load_station_sequences() const;
+  std::vector<station_seq> load_station_sequences(
+      std::string const& prefix) const;
 
   utl::buffer schedule_buffer_;
 };
