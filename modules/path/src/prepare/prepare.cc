@@ -29,6 +29,7 @@
 #include "motis/path/prepare/schedule/schedule_wrapper.h"
 #include "motis/path/prepare/schedule/stations.h"
 
+namespace fs = boost::filesystem;
 namespace ml = motis::logging;
 
 namespace motis::path {
@@ -54,8 +55,7 @@ inline void filter_sequences(std::vector<std::string> const& filters,
         return ids != seq.station_ids_;
       });
     } else if (tokens[0] == "extent") {
-      utl::verify(boost::filesystem::is_regular_file(tokens[1]),
-                  "cannot find extent polygon");
+      utl::verify(fs::is_regular_file(tokens[1]), "cannot find extent polygon");
       auto const extent_polygon = geo::read_poly_file(tokens[1]);
       utl::erase_if(sequences, [&](auto const& seq) {
         return std::any_of(begin(seq.coordinates_), end(seq.coordinates_),
@@ -81,36 +81,39 @@ inline void filter_sequences(std::vector<std::string> const& filters,
 }
 
 struct cachable_step {
-  explicit cachable_step(std::string const& task) : task_{task} {
-    utl::verify(task_ == "ignore" || task_ == "load" || task_ == "dump",
+  explicit cachable_step(std::string const& fname, std::string const& task)
+      : fname_{fname}, task_{task} {
+    utl::verify(task_ == "ignore" || task_ == "load" || task_ == "dump" ||
+                    task_ == "use",
                 "cachable_step: invalid task {}", task_);
   }
 
   template <typename LoadFn, typename DumpFn, typename ComputeFn>
   auto get(LoadFn&& load, DumpFn&& dump, ComputeFn&& compute)
       -> decltype(compute()) {
-    if (task_ == "load") {
-      return load();
+    if (task_ == "load" || (task_ == "use" && fs::is_regular_file(fname_))) {
+      return load(fname_);
     } else {
       auto value = compute();
-      if (task_ == "dump") {
-        dump(value);
+      if (task_ == "dump" || task_ == "use") {
+        dump(fname_, value);
       }
       return value;
     }
   }
 
+  std::string const& fname_;
   std::string const& task_;
 };
 
 void prepare(prepare_settings const& opt) {
-  utl::verify(boost::filesystem::is_regular_file(opt.osrm_),
+  utl::verify(fs::is_regular_file(opt.osrm_),
               "cannot find osrm dataset: [path={}]", opt.osrm_);
-  utl::verify(boost::filesystem::is_regular_file(opt.osm_),
+  utl::verify(fs::is_regular_file(opt.osm_),
               "cannot find osm dataset: [path={}]", opt.osm_);
 
-  cachable_step osm_cache{opt.osm_cache_task_};
-  cachable_step seq_cache{opt.seq_cache_task_};
+  cachable_step osm_cache{opt.osm_cache_file_, opt.osm_cache_task_};
+  cachable_step seq_cache{opt.seq_cache_file_, opt.seq_cache_task_};
 
   auto progress_tracker = utl::get_active_progress_tracker();
 
@@ -133,14 +136,14 @@ void prepare(prepare_settings const& opt) {
   mcd::unique_ptr<osm_data> osm_data_ptr;
   auto const load_osm_data = [&] {
     osm_data_ptr = osm_cache.get(
-        [&] { return read_osm_data(opt.osm_cache_file_, osm_data_mem); },
-        [&](auto const& d) { return write_osm_data(opt.osm_cache_file_, d); },
+        [&](auto const& f) { return read_osm_data(f, osm_data_mem); },
+        [&](auto const& f, auto const& dat) { return write_osm_data(f, dat); },
         [&] { return parse_osm(opt.osm_); });
   };
 
   auto resolved_seqs = seq_cache.get(
-      [&] { return read_from_fbs(opt.seq_cache_file_); },
-      [&](auto const& rs) { write_to_fbs(rs, opt.seq_cache_file_); },
+      [&](auto const& f) { return read_from_fbs(f); },
+      [&](auto const& f, auto const& rs) { write_to_fbs(rs, f); },
       [&] {
         load_osm_data();  // load only if resolve_sequences runs!
         LOG(ml::info) << "OSM DATA: " << osm_data_ptr->stop_positions_.size()
