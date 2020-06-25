@@ -43,52 +43,9 @@ struct import_state {
   named<cista::hash_t, MOTIS_NAME("schedule_hash")> schedule_hash_;
 };
 
-<<<<<<< HEAD
-path::path() : module("Path", "path") {}
-=======
-struct path::data {
-  size_t trip_to_index(schedule const& sched, trip const* trp) const {
-    utl::verify(sections::begin(trp) != sections::end(trp),
-                "trip_to_index: invalid trip");
-
-    return index_->find(
-        {utl::to_vec(access::stops(trp),
-                     [&sched](auto const& stop) {
-                       return stop.get_station(sched).eva_nr_.str();
-                     }),
-         (*std::min_element(sections::begin(trp), sections::end(trp),
-                            [](auto const& lhs, auto const& rhs) {
-                              return lhs.fcon().clasz_ < rhs.fcon().clasz_;
-                            }))
-             .fcon()
-             .clasz_});
-  }
-
-  msg_ptr get_response(size_t index, int const zoom_level = -1) const {
-    message_creator mc;
-    mc.create_and_finish(MsgContent_PathSeqResponse,
-                         reconstruct_sequence(mc, index, zoom_level).Union());
-    return make_msg(mc);
-  }
-
-  Offset<PathSeqResponse> reconstruct_sequence(
-      message_creator& mc, size_t index, int const zoom_level = -1) const {
-    path_database_query q{zoom_level};
-    q.add_sequence(index);
-    q.execute(*db_);
-    return q.write_sequence(mc, *db_, index);
-  }
-
-  std::unique_ptr<path_database> db_;
-  std::unique_ptr<path_index> index_;
-
-  tiles::render_ctx render_ctx_;
-};
-
-path::path() : module("Path", "path"), data_{std::make_unique<path::data>()} {
+path::path() : module("Path", "path") {
   param(use_cache_, "use_cache", "caches to use during import {osm, seq}");
 }
->>>>>>> path: optionally enable caching in import
 
 path::~path() = default;
 
