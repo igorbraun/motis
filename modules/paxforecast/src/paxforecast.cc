@@ -91,6 +91,10 @@ void paxforecast::on_monitoring_event(msg_ptr const& msg) {
     }
   }
 
+  if (combined_groups.empty()) {
+    return;
+  }
+
   auto routing_requests = 0ULL;
   auto alternatives_found = 0ULL;
 
@@ -156,8 +160,8 @@ void paxforecast::on_monitoring_event(msg_ptr const& msg) {
                 << " trips over capacity\n";
       for (auto const& [trp, edges] : trips_over_capacity) {
         auto const ci = trp->edges_->front()
-                            ->m_.route_edge_.conns_.at(trp->lcon_idx_)
-                            .full_con_->con_info_;
+            ->m_.route_edge_.conns_.at(trp->lcon_idx_)
+            .full_con_->con_info_;
         std::cout << "trip over capacity: " << get_service_name(sched, ci)
                   << " (tn=" << ci->train_nr_ << "):";
         for (auto const e : edges) {
@@ -169,16 +173,16 @@ void paxforecast::on_monitoring_event(msg_ptr const& msg) {
       }
     }
 
-    if (!combined_groups.empty()) {
-      log_output_->write_broken_connection(sched, data, combined_groups,
-                                           sim_result);
-      log_output_->flush();
+    log_output_->write_broken_connection(sched, data, combined_groups,
+                                         sim_result);
+    log_output_->flush();
 
-      ctx::await_all(motis_publish(make_passenger_forecast_msg(
-          sched, data, cpg_allocations, sim_result)));
-    }
+    auto const forecast_msg =
+        make_passenger_forecast_msg(sched, data, cpg_allocations, sim_result);
 
     revert_simulated_behavior(sim_result);
+
+    ctx::await_all(motis_publish(forecast_msg));
   }
 }
 
