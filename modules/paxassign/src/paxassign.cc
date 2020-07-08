@@ -1,7 +1,10 @@
 #include "motis/paxassign/paxassign.h"
 
+#include <iostream>
+
 #include "motis/core/common/logging.h"
 
+#include "motis/paxassign/build_toy_scenario.h"
 #include "motis/paxforecast/messages.h"
 #include "motis/paxmon/data_key.h"
 #include "motis/paxmon/graph_access.h"
@@ -23,6 +26,16 @@ void paxassign::init(motis::module::registry& reg) {
     on_forecast(msg);
     return nullptr;
   });
+
+  reg.subscribe("/paxforecast/toy_scenario", [&](msg_ptr const& msg) {
+    toy_scenario(msg);
+    return nullptr;
+  });
+}
+
+void paxassign::toy_scenario(const motis::module::msg_ptr& msg) {
+  std::cout << "paxassign toyscenario" << std::endl;
+  build_toy_scenario();
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
