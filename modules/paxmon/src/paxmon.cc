@@ -21,6 +21,7 @@
 #include "motis/paxmon/build_graph.h"
 #include "motis/paxmon/data_key.h"
 #include "motis/paxmon/graph_access.h"
+#include "motis/paxmon/loader/csv/csv_journeys.h"
 #include "motis/paxmon/loader/journeys/motis_journeys.h"
 #include "motis/paxmon/localization.h"
 #include "motis/paxmon/messages.h"
@@ -38,12 +39,16 @@ using namespace motis::rt;
 namespace motis::paxmon {
 
 paxmon::paxmon() : module("Passenger Monitoring", "paxmon") {
-  param(journey_file_, "journeys", "routing responses");
-  param(capacity_file_, "capacity", "train capacities");
+  param(journey_files_, "journeys", "csv journeys or routing responses");
+  param(capacity_files_, "capacity", "train capacities");
   param(stats_file_, "stats", "statistics file");
+  param(match_log_file_, "match_log", "journey match log file");
   param(start_time_, "start_time", "evaluation start time");
   param(end_time_, "end_time", "evaluation end time");
   param(time_step_, "time_step", "evaluation time step (seconds)");
+  param(match_tolerance_, "match_tolerance",
+        "journey match time tolerance (minutes)");
+  param(data_.default_capacity_, "default_capacity", "default capacity");
 }
 
 paxmon::~paxmon() = default;
@@ -55,10 +60,9 @@ void paxmon::init(motis::module::registry& reg) {
 
   add_shared_data(DATA_KEY, &data_);
 
-  reg.subscribe("/init", [&]() { /*load_journeys();*/ });
-  reg.register_op("/paxmon/load_journeys", [&](msg_ptr const&) -> msg_ptr {
+  reg.subscribe("/init", [&]() {
+    load_capacity_files();
     load_journeys();
-    return {};
   });
   reg.register_op("/paxmon/flush", [&](msg_ptr const&) -> msg_ptr {
     stats_writer_->flush();
@@ -103,35 +107,47 @@ void paxmon::init(motis::module::registry& reg) {
                     motis_call(make_no_msg("/paxmon/flush"))->val();
 
                     return {};
-                     */
+                    */
                   },
                   ctx::access_t::WRITE);
+}
 
-  load_capacity_file();
+std::size_t paxmon::load_journeys(std::string const& file) {
+  auto const journey_path = fs::path{file};
+  if (!fs::exists(journey_path)) {
+    LOG(warn) << "journey file not found: " << file;
+    return 0;
+  }
+  auto const& sched = get_schedule();
+  std::size_t loaded = 0;
+  if (journey_path.extension() == ".txt") {
+    scoped_timer journey_timer{"load motis journeys"};
+    loaded = loader::journeys::load_journeys(sched, data_, file);
+  } else if (journey_path.extension() == ".csv") {
+    scoped_timer journey_timer{"load csv journeys"};
+    loaded = loader::csv::load_journeys(sched, data_, file, match_log_file_,
+                                        match_tolerance_);
+  } else {
+    LOG(logging::error) << "paxmon: unknown journey file type: " << file;
+  }
+  LOG(loaded != 0 ? info : warn)
+      << "loaded " << loaded << " journeys from " << file;
+  return loaded;
 }
 
 void paxmon::load_journeys() {
   auto const& sched = get_schedule();
 
-  auto const journey_path = fs::path{journey_file_};
-  if (!fs::exists(journey_path)) {
-    LOG(warn) << "journey file not found: " << journey_file_;
-    return;
-  }
-  if (journey_path.extension() == ".txt") {
-    scoped_timer journey_timer{"load motis journeys"};
-    LOG(info) << "paxmon: loading motis journeys from file: " << journey_file_;
-    loader::journeys::load_journeys(sched, data_, journey_file_);
-  } else {
-    LOG(logging::error) << "paxmon: unknown journey file type: "
-                        << journey_file_;
+  if (journey_files_.empty()) {
+    LOG(warn) << "paxmon: no journey files specified";
     return;
   }
 
-  {
-    scoped_timer build_graph_timer{"build paxmon graph from journeys"};
-    build_graph_from_journeys(sched, data_);
+  for (auto const& file : journey_files_) {
+    load_journeys(file);
   }
+
+  auto build_stats = build_graph_from_journeys(sched, data_);
 
   std::uint64_t edge_count = 0;
   std::uint64_t trip_edge_count = 0;
@@ -174,18 +190,28 @@ void paxmon::load_journeys() {
   LOG(info) << fmt::format("{:n} stations", stations.size());
   LOG(info) << fmt::format("{:n} trips", trips.size());
   LOG(info) << fmt::format("{:n} edges over capacity initially",
-                           initial_over_capacity);
+                           build_stats.initial_over_capacity_);
 }
 
-void paxmon::load_capacity_file() {
-  auto const capacity_path = fs::path{capacity_file_};
-  if (!fs::exists(capacity_path)) {
-    LOG(warn) << "capacity file not found: " << capacity_file_;
-    return;
+void paxmon::load_capacity_files() {
+  auto const& sched = get_schedule();
+  auto total_entries = 0ULL;
+  for (auto const& file : capacity_files_) {
+    auto const capacity_path = fs::path{file};
+    if (!fs::exists(capacity_path)) {
+      LOG(warn) << "capacity file not found: " << file;
+      continue;
+    }
+    auto const entries_loaded = load_capacities(
+        sched, file, data_.trip_capacity_map_, data_.category_capacity_map_);
+    total_entries += entries_loaded;
+    LOG(info) << fmt::format("loaded {:n} capacity entries from {}",
+                             entries_loaded, file);
   }
-  data_.capacity_map_ = load_capacities(capacity_file_);
-  LOG(info) << fmt::format("loaded capacity data for {:n} trains",
-                           data_.capacity_map_.size());
+  if (total_entries == 0) {
+    LOG(warn) << "no capacity data loaded, using default capacity of "
+              << data_.default_capacity_ << " for all trains";
+  }
 }
 
 void check_broken_interchanges(

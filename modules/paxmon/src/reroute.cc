@@ -106,7 +106,7 @@ edge* connect_nodes(event_node* from, event_node* to, trip const* trp,
   }
   auto const type =
       from->type_ == event_type::DEP ? edge_type::TRIP : edge_type::WAIT;
-  return add_edge(edge{from, to, type, trp, 0, capacity, 0, false, {}});
+  return add_edge(make_trip_edge(from, to, type, trp, capacity));
 }
 
 event_node* get_or_insert_node(graph& g, trip_data& td, trip_ev_key const tek,
@@ -134,9 +134,11 @@ std::uint16_t guess_trip_capacity(schedule const& sched, paxmon_data& data,
                                   trip const* trp) {
   auto const sections = access::sections(trp);
   if (begin(sections) != end(sections)) {
-    return get_capacity(sched, data.capacity_map_, (*begin(sections)).lcon());
+    return get_capacity(sched, (*begin(sections)).lcon(),
+                        data.trip_capacity_map_, data.category_capacity_map_,
+                        data.default_capacity_);
   } else {
-    return 0;  // TODO(pablo): ???
+    return 0;
   }
 }
 

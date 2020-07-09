@@ -25,7 +25,7 @@ struct fixed_acceptance {
       auto const recommended_index = recommended.value();
       for (auto i = 0ULL; i < alternatives.size(); ++i) {
         if (i != recommended_index) {
-          scores[i] = scores[i] = std::numeric_limits<double>::max();
+          scores[i] = std::numeric_limits<double>::max();
         }
       }
     }
