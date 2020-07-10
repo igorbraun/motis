@@ -4,11 +4,59 @@
 
 #include "utl/enumerate.h"
 
+#include "gurobi_c++.h"
+
 namespace motis::paxassign {
+
+void try_gurobi() {
+  try {
+
+    // Create an environment
+    GRBEnv env = GRBEnv(true);
+    env.set("LogFile", "mip1.log");
+    env.start();
+
+    // Create an empty model
+    GRBModel model = GRBModel(env);
+
+    // Create variables
+    GRBVar x = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x");
+    GRBVar y = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "y");
+    GRBVar z = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "z");
+
+    // Set objective: maximize x + y + 2 z
+    model.setObjective(x + y + 2 * z, GRB_MAXIMIZE);
+
+    // Add constraint: x + 2 y + 3 z <= 4
+    model.addConstr(x + 2 * y + 3 * z <= 4, "c0");
+
+    // Add constraint: x + y >= 1
+    model.addConstr(x + y >= 1, "c1");
+
+    // Optimize model
+    model.optimize();
+
+    std::cout << x.get(GRB_StringAttr_VarName) << " " << x.get(GRB_DoubleAttr_X)
+              << std::endl;
+    std::cout << y.get(GRB_StringAttr_VarName) << " " << y.get(GRB_DoubleAttr_X)
+              << std::endl;
+    std::cout << z.get(GRB_StringAttr_VarName) << " " << z.get(GRB_DoubleAttr_X)
+              << std::endl;
+
+    std::cout << "Obj: " << model.get(GRB_DoubleAttr_ObjVal) << std::endl;
+
+  } catch (GRBException e) {
+    std::cout << "Error code = " << e.getErrorCode() << std::endl;
+    std::cout << e.getMessage() << std::endl;
+  } catch (...) {
+    std::cout << "Exception during optimization" << std::endl;
+  }
+}
 
 void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
                              cap_ILP_config const& config,
                              std::string const& scenario_id) {
+  try_gurobi();
   std::cout << "BUILD ILP" << std::endl;
 
   std::ofstream ilp_file("motis/build/rel/ilp_files/" + scenario_id + ".lp");

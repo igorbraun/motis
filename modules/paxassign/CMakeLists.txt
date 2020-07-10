@@ -16,3 +16,9 @@ target_link_libraries(motis-paxassign
   motis-paxforecast
 )
 target_compile_options(motis-paxassign PRIVATE ${MOTIS_CXX_FLAGS})
+
+find_package(GUROBI REQUIRED)
+target_include_directories(motis-paxassign PUBLIC ${GUROBI_INCLUDE_DIRS})
+set(GUROBI_CXX_DEBUG_LIBRARY ${GUROBI_CXX_LIBRARY})
+target_link_libraries(motis-paxassign optimized ${GUROBI_CXX_LIBRARY} debug ${GUROBI_CXX_DEBUG_LIBRARY})
+target_link_libraries(motis-paxassign ${GUROBI_LIBRARY})

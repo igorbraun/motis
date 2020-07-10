@@ -85,6 +85,7 @@ add_definitions(/DBOOST_ASIO_DISABLE_CONCEPTS=1)  # fixes issue with Boost 1.72.
 ################################
 # Dependencies
 ################################
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_MULTITHREADED ON)
 if (MSVC)
