@@ -13,12 +13,12 @@ struct cap_ILP_edge {
 
 struct cap_ILP_connection {
   uint32_t id_;
-  std::vector<cap_ILP_edge> edges_;
+  std::vector<cap_ILP_edge*> edges_;
 };
 
 struct cap_ILP_psg_group {
   uint32_t id_;
-  std::vector<cap_ILP_connection> alternatives_;
+  std::vector<cap_ILP_connection*> alternatives_;
   int psg_count_;
 };
 

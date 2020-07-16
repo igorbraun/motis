@@ -33,7 +33,7 @@ void paxassign::init(motis::module::registry& reg) {
   });
 }
 
-void paxassign::toy_scenario(const motis::module::msg_ptr& msg) {
+void paxassign::toy_scenario(const motis::module::msg_ptr&) {
   std::cout << "paxassign toyscenario" << std::endl;
   build_toy_scenario();
 }
