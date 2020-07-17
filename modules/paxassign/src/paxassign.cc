@@ -130,7 +130,71 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
 
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
-  
+
+  // cap_ILP_edge, cap_ILP_connection, cap_ILP_psg_group aus allen Alternativen
+  // von allen Passagieren bauen
+  std::map<motis::paxmon::edge*, uint32_t> paxmon_to_cap_ILP_edge;
+  {
+    scoped_timer alt_timer{"build capacitated model"};
+    for (auto& cgs : combined_groups) {
+      for (auto& cpg : cgs.second) {
+        std::cout << "psg is at the station "
+                  << cpg.localization_.at_station_->name_ << std::endl;
+        for (auto const& alt : cpg.alternatives_) {
+          motis::paxmon::event_node* last_node = nullptr;
+          for (auto const& [leg_idx, leg] :
+               utl::enumerate(alt.compact_journey_.legs_)) {
+            auto const td = data.graph_.trip_data_.at(leg.trip_).get();
+            auto in_trip = false;
+            for (auto [edge_idx, e] : utl::enumerate(td->edges_)) {
+              if (e->from_->station_ == leg.enter_station_id_ &&
+                  e->from_->time_ == leg.enter_time_) {
+                in_trip = true;
+                if (last_node != nullptr) {
+                  for (auto& oe : last_node->outgoing_edges(data.graph_)) {
+                    if (oe->type_ == motis::paxmon::edge_type::INTERCHANGE &&
+                        oe->to(data.graph_) == e->from_) {
+                      // TODO: add interchange node to the ilp model with
+                      // duration:
+                      e->transfer_time();
+                    }
+                  }
+                }
+              }
+              if (in_trip) {
+                // TODO: add trip edge to the ilp model using following data
+                e->capacity();
+                e->passengers_;  // first do grp.edges_ - passengers from
+                                 // combined group
+                e->type();  // check, that it is trip edge
+                e->to_->current_time() -
+                    e->from_->current_time();  // duration / cost?
+              }
+              if (e->to_->station_idx() ==
+                  leg.exit_station_id_) {  // is that true? how is it with
+                                           // interchange edges? from == to?
+                // add also interchange edge to the model:
+                last_node = e->to_;
+                break;
+              }
+              // TODO: till now no wait edges considered
+            }
+          }
+
+          // TODO: check that journey_.stops_ math the build ILP connections
+          std::cout << "alternative has " << alt.journey_.trips_.size()
+                    << " trips" << std::endl;
+          std::cout << "alternative starts at "
+                    << alt.journey_.stops_.begin()->name_ << std::endl;
+          alt.journey_.trips_[0];
+          alt.journey_.attributes_[0].from_;
+
+          // std::cout << "from: " << alt.journey_.attributes_[0].from_
+          //          << " to " << alt.journey_.attributes_[0].to_ << std::endl;
+        }
+      }
+    }
+  }
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
