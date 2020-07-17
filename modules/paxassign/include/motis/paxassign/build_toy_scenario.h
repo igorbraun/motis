@@ -10,8 +10,7 @@
 namespace motis::paxassign {
 
 void build_toy_scenario() {
-  std::cout << "BUILD TEST SCENARIOT" << std::endl;
-
+  std::cout << "BUILD TEST SCENARIO" << std::endl;
   // frist graph
   cap_ILP_edge e1{1, 10, 30, edge_type::TRIP};
   cap_ILP_edge ew_1_2{100, 5, 30, edge_type::WAIT};

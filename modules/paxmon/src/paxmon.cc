@@ -82,37 +82,31 @@ void paxmon::init(motis::module::registry& reg) {
   // --init /paxmon/eval
   // --paxmon.start_time YYYY-MM-DDTHH:mm
   // --paxmon.end_time YYYY-MM-DDTHH:mm
-  reg.register_op("/paxmon/eval",
-                  [&](msg_ptr const&) -> msg_ptr {
-                    ctx::await_all(motis_publish(motis::module::make_no_msg(
-                        "/paxforecast/toy_scenario")));
-                    return {};
-                    /*
-                    auto const forward = [](std::time_t time) {
-                      using namespace motis::ris;
-                      message_creator fbb;
-                      fbb.create_and_finish(MsgContent_RISForwardTimeRequest,
-                                            CreateRISForwardTimeRequest(fbb,
-                    time).Union(),
-                                            "/ris/forward");
-                      LOG(info) << "paxmon: forwarding time to: " <<
-                    format_unix_time(time); motis_call(make_msg(fbb))->val();
-                    };
+  reg.register_op(
+      "/paxmon/eval",
+      [&](msg_ptr const&) -> msg_ptr {
+        auto const forward = [](std::time_t time) {
+          using namespace motis::ris;
+          message_creator fbb;
+          fbb.create_and_finish(MsgContent_RISForwardTimeRequest,
+                                CreateRISForwardTimeRequest(fbb, time).Union(),
+                                "/ris/forward");
+          LOG(info) << "paxmon: forwarding time to: " << format_unix_time(time);
+          motis_call(make_msg(fbb))->val();
+        };
 
-                    LOG(info) << "paxmon: start time: " <<
-                    format_unix_time(start_time_)
-                              << ", end time: " << format_unix_time(end_time_);
+        LOG(info) << "paxmon: start time: " << format_unix_time(start_time_)
+                  << ", end time: " << format_unix_time(end_time_);
 
-                    for (auto t = start_time_; t <= end_time_; t += time_step_)
-                    { forward(t);
-                    }
+        for (auto t = start_time_; t <= end_time_; t += time_step_) {
+          forward(t);
+        }
 
-                    motis_call(make_no_msg("/paxmon/flush"))->val();
+        motis_call(make_no_msg("/paxmon/flush"))->val();
 
-                    return {};
-                    */
-                  },
-                  ctx::access_t::WRITE);
+        return {};
+      },
+      ctx::access_t::WRITE);
 }
 
 void print_graph_stats(graph_statistics const& graph_stats) {

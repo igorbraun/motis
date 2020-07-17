@@ -26,7 +26,7 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
     }
 
     GRBEnv env = GRBEnv(true);
-    env.set("LogFile", scenario_id + ".log");
+    // env.set("LogFile", scenario_id + ".log");
     env.start();
     GRBModel model = GRBModel(env);
 
