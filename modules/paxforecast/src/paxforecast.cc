@@ -51,7 +51,7 @@ void paxforecast::init(motis::module::registry& reg) {
   log_output_ = std::make_unique<output::log_output>(log_file_);
 
   reg.subscribe("/paxmon/monitoring_update", [&](msg_ptr const& msg) {
-    on_monitoring_event(msg);
+    //on_monitoring_event(msg);
     return nullptr;
   });
 }

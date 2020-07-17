@@ -24,6 +24,7 @@ struct paxassign : public motis::module::module {
 
 private:
   void on_forecast(motis::module::msg_ptr const& msg);
+  void on_monitoring(motis::module::msg_ptr const& msg);
   void toy_scenario(const motis::module::msg_ptr&);
 };
 
