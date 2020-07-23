@@ -13,6 +13,7 @@
 
 #include "motis/paxforecast/messages.h"
 
+#include "motis/paxmon/build_graph.h"
 #include "motis/paxmon/data_key.h"
 #include "motis/paxmon/graph_access.h"
 #include "motis/paxmon/messages.h"
@@ -52,6 +53,31 @@ void paxassign::init(motis::module::registry& reg) {
 void paxassign::toy_scenario(const motis::module::msg_ptr&) {
   std::cout << "paxassign toyscenario" << std::endl;
   build_toy_scenario();
+}
+
+uint32_t find_edge_idx(trip_data const* td,
+                       motis::paxmon::journey_leg const& leg, bool const from) {
+  auto result_edge =
+      std::find_if(begin(td->edges_), end(td->edges_), [&](auto const& e) {
+        if (from) {
+          return e->from_->station_ == leg.enter_station_id_;
+        } else {
+          return e->to_->station_ == leg.exit_station_id_;
+        }
+      });
+  return distance(begin(td->edges_), result_edge);
+}
+
+inline duration get_transfer_duration(std::optional<transfer_info> const& ti) {
+  return ti.has_value() ? ti.value().duration_ : 0;
+}
+
+void add_cap_edge(
+    motis::paxmon::edge* e, cap_ILP_edge const& cap_e,
+    std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge>& cap_edges) {
+  if (cap_edges.find(e) == cap_edges.end()) {
+    cap_edges[e] = cap_e;
+  }
 }
 
 void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
@@ -120,8 +146,19 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
       for (auto& cpg : cgs.second) {
         alternatives_found += cpg.alternatives_.size();
         for (auto const& alt : cpg.alternatives_) {
+          event_node* last_node = nullptr;
           for (auto const& leg : alt.compact_journey_.legs_) {
-            get_or_add_trip(sched, data, leg.trip_);
+            auto td = get_or_add_trip(sched, data, leg.trip_);
+            if (last_node != nullptr) {
+              auto const transfer_time =
+                  get_transfer_duration(leg.enter_transfer_);
+              auto const inch_e_start_idx = find_edge_idx(td, leg, true);
+              add_interchange_edge(last_node,
+                                   td->edges_[inch_e_start_idx]->from_,
+                                   transfer_time, data.graph_);
+            }
+            auto const leg_last_st_idx = find_edge_idx(td, leg, false);
+            last_node = td->edges_[leg_last_st_idx]->to_;
           }
         }
       }
@@ -131,66 +168,93 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
 
-  // cap_ILP_edge, cap_ILP_connection, cap_ILP_psg_group aus allen Alternativen
-  // von allen Passagieren bauen
+  // cap_ILP_edge, cap_ILP_connection, cap_ILP_psg_group aus allen
+  // Alternativen von allen Passagieren bauen
   std::map<motis::paxmon::edge*, uint32_t> paxmon_to_cap_ILP_edge;
+  uint32_t curr_e_id = 1;
+  uint32_t curr_alt_id = 1;
+  std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
   {
+    // TODO: for_each_edge: subtract each psg group in scenario from its edges
     scoped_timer alt_timer{"build capacitated model"};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
-        std::cout << "psg is at the station "
-                  << cpg.localization_.at_station_->name_ << std::endl;
         for (auto const& alt : cpg.alternatives_) {
-          motis::paxmon::event_node* last_node = nullptr;
-          for (auto const& [leg_idx, leg] :
+          cap_ILP_connection curr_connection{curr_alt_id++,
+                                             std::vector<cap_ILP_edge*>{}};
+          for (auto const [leg_idx, leg] :
                utl::enumerate(alt.compact_journey_.legs_)) {
             auto const td = data.graph_.trip_data_.at(leg.trip_).get();
-            auto in_trip = false;
-            for (auto [edge_idx, e] : utl::enumerate(td->edges_)) {
-              if (e->from_->station_ == leg.enter_station_id_ &&
-                  e->from_->time_ == leg.enter_time_) {
-                in_trip = true;
-                if (last_node != nullptr) {
-                  for (auto& oe : last_node->outgoing_edges(data.graph_)) {
-                    if (oe->type_ == motis::paxmon::edge_type::INTERCHANGE &&
-                        oe->to(data.graph_) == e->from_) {
-                      // TODO: add interchange node to the ilp model with
-                      // duration:
-                      e->transfer_time();
+
+            auto start_edge_idx = find_edge_idx(td, leg, true);
+            auto last_edge_idx = find_edge_idx(td, leg, false);
+
+            // ILP TRIP EDGES
+            for (auto i = start_edge_idx; i <= last_edge_idx; ++i) {
+              if (cap_edges.find(td->edges_[i]) == cap_edges.end()) {
+                cap_edges[td->edges_[i]] = cap_ILP_edge{
+                    curr_e_id++,
+                    static_cast<uint32_t>(td->edges_[i]->to_->current_time() -
+                                          td->edges_[i]->from_->current_time()),
+                    td->edges_[i]->capacity() - td->edges_[i]->passengers_,
+                    edge_type::TRIP};
+              }
+              curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
+
+              // ILP WAIT EDGES
+              if (i < last_edge_idx - 1) {
+                for (auto const& oe :
+                     td->edges_[i]->to_->outgoing_edges(data.graph_)) {
+                  if (oe->type_ == motis::paxmon::edge_type::WAIT &&
+                      oe->to_ == td->edges_[i + 1]->from_) {
+                    if (cap_edges.find(oe.get()) == cap_edges.end()) {
+                      cap_edges[oe.get()] = cap_ILP_edge{
+                          curr_e_id++,
+                          static_cast<uint32_t>(
+                              td->edges_[i + 1]->from_->current_time() -
+                              td->edges_[i]->to_->current_time()),
+                          oe->capacity() - oe->passengers_, edge_type::WAIT};
                     }
+                    curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
                   }
                 }
               }
-              if (in_trip) {
-                // TODO: add trip edge to the ilp model using following data
-                e->capacity();
-                e->passengers_;  // first do grp.edges_ - passengers from
-                                 // combined group
-                e->type();  // check, that it is trip edge
-                e->to_->current_time() -
-                    e->from_->current_time();  // duration / cost?
+            }
+
+            // ILP INTERCHANGE EDGES
+            if (leg_idx < alt.compact_journey_.legs_.size() - 1) {
+              auto const td_next =
+                  data.graph_.trip_data_
+                      .at(alt.compact_journey_.legs_[leg_idx + 1].trip_)
+                      .get();
+              auto inch_target_st_idx = find_edge_idx(
+                  td_next, alt.compact_journey_.legs_[leg_idx + 1], true);
+              for (auto const& oe :
+                   td->edges_[last_edge_idx]->to_->outgoing_edges(
+                       data.graph_)) {
+                if (oe->type_ == motis::paxmon::edge_type::INTERCHANGE &&
+                    oe->to_ == td_next->edges_[inch_target_st_idx]->from_) {
+                  if (cap_edges.find(oe.get()) == cap_edges.end()) {
+                    cap_edges[oe.get()] =
+                        cap_ILP_edge{curr_e_id++, oe->transfer_time(), 100000,
+                                     edge_type::INTERCHANGE};
+                  }
+                  curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
+                }
               }
-              if (e->to_->station_idx() ==
-                  leg.exit_station_id_) {  // is that true? how is it with
-                                           // interchange edges? from == to?
-                // add also interchange edge to the model:
-                last_node = e->to_;
-                break;
-              }
-              // TODO: till now no wait edges considered
             }
           }
-
-          // TODO: check that journey_.stops_ math the build ILP connections
-          std::cout << "alternative has " << alt.journey_.trips_.size()
-                    << " trips" << std::endl;
-          std::cout << "alternative starts at "
-                    << alt.journey_.stops_.begin()->name_ << std::endl;
-          alt.journey_.trips_[0];
-          alt.journey_.attributes_[0].from_;
-
-          // std::cout << "from: " << alt.journey_.attributes_[0].from_
-          //          << " to " << alt.journey_.attributes_[0].to_ << std::endl;
+          uint32_t cum_tt = 0;
+          for (auto const& e : curr_connection.edges_) {
+            std::cout << e->id_ << " " << e->tt_ << " " << e->capacity_
+                      << std::endl;
+            cum_tt += e->tt_;
+          }
+          // TODO: auto const dur =
+          //        static_cast<duration>(arrival_time -
+          //        localization.arrival_time_);
+          std::cout << "ALTERNATIVE TT: " << cum_tt << " VS " << alt.duration_
+                    << std::endl;
         }
       }
     }
@@ -233,7 +297,8 @@ void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
               << edges_over_capacity;
   }
 
-  // auto psg_assignment = build_ILP_from_scenario_API(psg_groups, config, "1");
+  // auto psg_assignment = build_ILP_from_scenario_API(psg_groups, config,
+  // "1");
 }
 
 }  // namespace motis::paxassign
