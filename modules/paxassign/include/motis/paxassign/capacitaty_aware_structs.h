@@ -13,6 +13,7 @@ struct cap_ILP_edge {
 
 struct cap_ILP_connection {
   uint32_t id_;
+  uint32_t associated_waiting_time_;
   std::vector<cap_ILP_edge*> edges_;
 };
 

@@ -79,7 +79,7 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
     for (auto const& pg : passengers) {
       for (auto const& a : pg.alternatives_) {
         alt_route_vars[pg.id_].push_back(model.addVar(
-            0.0, 1.0, 0.0, GRB_BINARY,
+            0.0, 1.0, a->associated_waiting_time_, GRB_BINARY,
             "y_" + std::to_string(pg.id_) + "_" + std::to_string(a->id_)));
       }
     }
