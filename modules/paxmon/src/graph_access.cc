@@ -220,4 +220,17 @@ void for_each_edge(schedule const& sched, paxmon_data& data,
                 });
 }
 
+void add_interchange_edge(event_node* from, event_node* to,
+                          duration transfer_time, graph const& g) {
+  for (auto& e : from->outgoing_edges(g)) {
+    if (e->type_ == edge_type::INTERCHANGE && e->to(g) == to &&
+        e->transfer_time() == transfer_time) {
+      return;
+    }
+  }
+
+  add_edge(
+      make_interchange_edge(from, to, transfer_time, 0, pax_connection_info{}));
+}
+
 }  // namespace motis::paxmon

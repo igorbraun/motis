@@ -58,4 +58,7 @@ void for_each_edge(schedule const& sched, paxmon_data& data,
                    compact_journey const& journey,
                    std::function<void(journey_leg const&, edge*)> const& fn);
 
+void add_interchange_edge(event_node* from, event_node* to,
+                          duration transfer_time, graph const& g);
+
 }  // namespace motis::paxmon
