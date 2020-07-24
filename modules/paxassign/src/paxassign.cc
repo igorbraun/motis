@@ -73,7 +73,6 @@ inline duration get_transfer_duration(std::optional<transfer_info> const& ti) {
 }
 
 void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
-  std::cout << "IN PAXASSIGN::ON_MONITORING" << std::endl;
   auto const& sched = get_schedule();
   auto& data = *get_shared_data<paxmon_data*>(motis::paxmon::DATA_KEY);
 
@@ -160,17 +159,18 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
 
-  // cap_ILP_edge, cap_ILP_connection, cap_ILP_psg_group aus allen
-  // Alternativen von allen Passagieren bauen
   std::map<motis::paxmon::edge*, uint32_t> paxmon_to_cap_ILP_edge;
+  uint32_t curr_cpg_id = 1;
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
   {
     // TODO: for_each_edge: subtract each psg group in scenario from its edges
     scoped_timer alt_timer{"build capacitated model"};
+    std::vector<cap_ILP_psg_group> cap_ILP_scenario;
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
+        std::vector<cap_ILP_connection> cpg_ILP_connections;
         for (auto const& alt : cpg.alternatives_) {
           cap_ILP_connection curr_connection{curr_alt_id++, 0,
                                              std::vector<cap_ILP_edge*>{}};
@@ -248,16 +248,19 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
               }
             }
           }
-          uint32_t cum_tt = 0;
-          cum_tt += associated_waiting_time;
-          for (auto const& e : curr_connection.edges_) {
-            cum_tt += e->tt_;
-          }
-          std::cout << "ALTERNATIVE TT: " << cum_tt << " VS " << alt.duration_
-                    << std::endl;
+          curr_connection.associated_waiting_time_ = associated_waiting_time;
+          cpg_ILP_connections.push_back(curr_connection);
         }
+        cap_ILP_scenario.push_back(cap_ILP_psg_group{
+            curr_cpg_id++, cpg_ILP_connections, cpg.passengers_});
       }
     }
+
+    std::srand(std::time(nullptr));
+    int random_variable = std::rand();
+
+    build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
+                                std::to_string(random_variable));
   }
 }
 

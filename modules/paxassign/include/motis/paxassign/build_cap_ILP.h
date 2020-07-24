@@ -18,7 +18,7 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
 
     for (auto const& pg : passengers) {
       for (auto const& a : pg.alternatives_) {
-        for (auto const& e : a->edges_) {
+        for (auto const& e : a.edges_) {
           edge_to_psgs[e->id_].insert(&pg);
           handled_edges.insert(e);
         }
@@ -39,7 +39,20 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
     std::vector<std::vector<GRBVar>> edge_cost_vars((*pr)->id_ + 1);
     for (auto const& e : handled_edges) {
       switch (e->type_) {
-        case edge_type::TRIP:
+        case edge_type::TRIP: {
+          uint32_t last_cap_step = 0;
+          for (auto const [i, penalty] :
+               utl::enumerate(config.tt_and_waiting_penalties_)) {
+            auto curr_cap_step = uint32_t(
+                e->capacity_ * config.cost_function_capacity_steps_[i]);
+            edge_cost_vars[e->id_].push_back(model.addVar(
+                0.0, curr_cap_step - last_cap_step, penalty * e->tt_,
+                GRB_INTEGER,
+                "T_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
+            last_cap_step = curr_cap_step;
+          }
+          break;
+        }
         case edge_type::WAIT: {
           uint32_t last_cap_step = 0;
           for (auto const [i, penalty] :
@@ -49,21 +62,22 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
             edge_cost_vars[e->id_].push_back(model.addVar(
                 0.0, curr_cap_step - last_cap_step, penalty * e->tt_,
                 GRB_INTEGER,
-                "f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
+                "W_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
             last_cap_step = curr_cap_step;
           }
           break;
         }
         case edge_type::INTERCHANGE: {
           edge_cost_vars[e->id_].push_back(
-              model.addVar(0.0, 0.0, config.transfer_penalty_ + e->tt_,
-                           GRB_INTEGER, "f_" + std::to_string(e->id_)));
+              model.addVar(0.0, std::numeric_limits<double>::max(),
+                           config.transfer_penalty_ + e->tt_, GRB_INTEGER,
+                           "I_f_" + std::to_string(e->id_)));
           break;
         }
         case edge_type::NOROUTE: {
           edge_cost_vars[e->id_].push_back(
               model.addVar(0.0, 0.0, config.no_route_cost_, GRB_INTEGER,
-                           "f_" + std::to_string(e->id_)));
+                           "NR_f_" + std::to_string(e->id_)));
           break;
         }
       }
@@ -79,8 +93,8 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
     for (auto const& pg : passengers) {
       for (auto const& a : pg.alternatives_) {
         alt_route_vars[pg.id_].push_back(model.addVar(
-            0.0, 1.0, a->associated_waiting_time_, GRB_BINARY,
-            "y_" + std::to_string(pg.id_) + "_" + std::to_string(a->id_)));
+            0.0, 1.0, a.associated_waiting_time_, GRB_BINARY,
+            "y_" + std::to_string(pg.id_) + "_" + std::to_string(a.id_)));
       }
     }
 
@@ -113,7 +127,7 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
       }
       uint16_t alt_id = 0;
       for (auto const& a : pg.alternatives_) {
-        for (auto const& e : a->edges_) {
+        for (auto const& e : a.edges_) {
           for (auto const& p_to_edge : edge_usage_vars[e->id_]) {
             if (p_to_edge.first == pg.id_) {
               model.addGenConstrIndicator(alt_route_vars[pg.id_][alt_id], 1.0,
@@ -143,14 +157,16 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
     model.optimize();
+
+    model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
+    model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
+
     int status = model.get(GRB_IntAttr_Status);
     if (status != GRB_OPTIMAL) {
       throw std::runtime_error("capacitated ILP model: solution not optimal");
     }
 
     std::cout << "Obj: " << model.get(GRB_DoubleAttr_ObjVal) << std::endl;
-    model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
-    model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
 
     std::vector<uint16_t> alt_to_use;
     for (auto const& pg : passengers) {
@@ -183,7 +199,7 @@ void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
   std::map<uint32_t, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
   for (auto const& pg : passengers) {
     for (auto const& a : pg.alternatives_) {
-      for (auto const& e : a->edges_) {
+      for (auto const& e : a.edges_) {
         edge_to_psgs[e->id_].insert(&pg);
         if (handled_edges.find(e) != handled_edges.end()) {
           continue;
@@ -219,7 +235,7 @@ void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
   for (auto const& pg : passengers) {
     for (auto const& a : pg.alternatives_) {
       ilp_file << "+ y_" << std::to_string(pg.id_) << "_"
-               << std::to_string(a->id_) << " ";
+               << std::to_string(a.id_) << " ";
     }
     ilp_file << "= 1\n";
   }
@@ -227,10 +243,10 @@ void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
   // INDICATOR CONSTRAINTS
   for (auto const& pg : passengers) {
     for (auto const& a : pg.alternatives_) {
-      for (auto const& e : a->edges_) {
+      for (auto const& e : a.edges_) {
         // b1 = 1 -> 2.5 x + 2.3 y + 5.3 z <= 8.1
         ilp_file << "y_" << std::to_string(pg.id_) << "_"
-                 << std::to_string(a->id_) << " = 1 -> "
+                 << std::to_string(a.id_) << " = 1 -> "
                  << "delta_" << std::to_string(pg.id_) << "_"
                  << std::to_string(e->id_) << " = 1\n";
       }

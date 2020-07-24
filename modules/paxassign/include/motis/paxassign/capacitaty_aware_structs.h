@@ -19,7 +19,7 @@ struct cap_ILP_connection {
 
 struct cap_ILP_psg_group {
   uint32_t id_;
-  std::vector<cap_ILP_connection*> alternatives_;
+  std::vector<cap_ILP_connection> alternatives_;
   int psg_count_;
 };
 
@@ -27,7 +27,7 @@ struct cap_ILP_config {
   std::vector<double> cost_function_capacity_steps_{0.65, 1.0, 1.2};
   std::vector<double> tt_and_waiting_penalties_{1.0, 1.2, 2.0};
 
-  double const transfer_penalty_ = 5;
+  double const transfer_penalty_ = 0;
   double const no_route_cost_ = 10000;
 };
 
