@@ -8,7 +8,6 @@
 
 namespace motis::paxassign {
 
-// TODO: NOROUTE edges as alternative for real cases
 std::vector<uint16_t> build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
     cap_ILP_config const& config, std::string const& scenario_id) {
@@ -75,9 +74,9 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
           break;
         }
         case edge_type::NOROUTE: {
-          edge_cost_vars[e->id_].push_back(
-              model.addVar(0.0, 0.0, config.no_route_cost_, GRB_INTEGER,
-                           "NR_f_" + std::to_string(e->id_)));
+          edge_cost_vars[e->id_].push_back(model.addVar(
+              0.0, std::numeric_limits<double>::max(), 0,
+              GRB_INTEGER, "NR_f_" + std::to_string(e->id_)));
           break;
         }
       }

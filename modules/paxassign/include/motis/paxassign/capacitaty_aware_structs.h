@@ -28,7 +28,7 @@ struct cap_ILP_config {
   std::vector<double> tt_and_waiting_penalties_{1.0, 1.2, 2.0};
 
   double const transfer_penalty_ = 0;
-  double const no_route_cost_ = 10000;
+  uint32_t const no_route_cost_ = 100000;
 };
 
 }  // namespace motis::paxassign

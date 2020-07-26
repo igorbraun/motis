@@ -159,15 +159,17 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
 
-  std::map<motis::paxmon::edge*, uint32_t> paxmon_to_cap_ILP_edge;
   uint32_t curr_cpg_id = 1;
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
+  cap_ILP_edge no_route_edge{curr_e_id++, 100000, 100000, edge_type::NOROUTE};
+
   {
     // TODO: for_each_edge: subtract each psg group in scenario from its edges
     scoped_timer alt_timer{"build capacitated model"};
     std::vector<cap_ILP_psg_group> cap_ILP_scenario;
+    cap_ILP_config ILP_config{};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
         std::vector<cap_ILP_connection> cpg_ILP_connections;
@@ -251,6 +253,8 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
           curr_connection.associated_waiting_time_ = associated_waiting_time;
           cpg_ILP_connections.push_back(curr_connection);
         }
+        cpg_ILP_connections.push_back(cap_ILP_connection{
+            curr_alt_id++, ILP_config.no_route_cost_, {&no_route_edge}});
         cap_ILP_scenario.push_back(cap_ILP_psg_group{
             curr_cpg_id++, cpg_ILP_connections, cpg.passengers_});
       }
@@ -258,7 +262,7 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
 
     std::srand(std::time(nullptr));
     int random_variable = std::rand();
-
+    std::cout << "BUILDING & SOLVING " << random_variable << std::endl;
     build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
                                 std::to_string(random_variable));
   }
