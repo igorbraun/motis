@@ -111,6 +111,22 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
     return;
   }
 
+  {
+    scoped_timer withdraw_pg_assignments{"withdraw pg assignments"};
+    for (auto const& same_dest_gr : combined_groups) {
+      for (auto const& cpg : same_dest_gr.second) {
+        for (auto const& g : cpg.groups_) {
+          for (auto& e : g->edges_) {
+            e->passengers_ -= g->passengers_;
+            if (e->passengers_ < 0) {
+              throw std::runtime_error("edge psgs less than 0");
+            }
+          }
+        }
+      }
+    }
+  }
+
   auto routing_requests = 0ULL;
   auto alternatives_found = 0ULL;
 
@@ -166,7 +182,6 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   cap_ILP_edge no_route_edge{curr_e_id++, 100000, 100000, edge_type::NOROUTE};
 
   {
-    // TODO: for_each_edge: subtract each psg group in scenario from its edges
     scoped_timer alt_timer{"build capacitated model"};
     std::vector<cap_ILP_psg_group> cap_ILP_scenario;
     cap_ILP_config ILP_config{};
@@ -265,6 +280,19 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
     std::cout << "BUILDING & SOLVING " << random_variable << std::endl;
     build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
                                 std::to_string(random_variable));
+  }
+
+  {
+    scoped_timer pg_assignments{"assign psgs back to edges"};
+    for (auto const& same_dest_gr : combined_groups) {
+      for (auto const& cpg : same_dest_gr.second) {
+        for (auto const& g : cpg.groups_) {
+          for (auto& e : g->edges_) {
+            e->passengers_ += g->passengers_;
+          }
+        }
+      }
+    }
   }
 }
 
