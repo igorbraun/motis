@@ -74,9 +74,9 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
           break;
         }
         case edge_type::NOROUTE: {
-          edge_cost_vars[e->id_].push_back(model.addVar(
-              0.0, std::numeric_limits<double>::max(), 0,
-              GRB_INTEGER, "NR_f_" + std::to_string(e->id_)));
+          edge_cost_vars[e->id_].push_back(
+              model.addVar(0.0, std::numeric_limits<double>::max(), 0,
+                           GRB_INTEGER, "NR_f_" + std::to_string(e->id_)));
           break;
         }
       }
@@ -121,9 +121,6 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
 
     // ALTERNATIVE -> PSG-EDGE USAGE ACTIVATION
     for (auto const& pg : passengers) {
-      if (pg.id_ == 3) {
-        std::cout << "pg3 currently handled" << std::endl;
-      }
       uint16_t alt_id = 0;
       for (auto const& a : pg.alternatives_) {
         for (auto const& e : a.edges_) {
@@ -155,9 +152,10 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
     }
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+    model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
+
     model.optimize();
 
-    model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
     model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
 
     int status = model.get(GRB_IntAttr_Status);

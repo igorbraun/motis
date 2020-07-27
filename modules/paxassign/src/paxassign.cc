@@ -5,6 +5,7 @@
 #include "motis/core/common/date_time_util.h"
 #include "motis/core/common/logging.h"
 #include "motis/core/access/service_access.h"
+#include "motis/core/access/station_access.h"
 #include "motis/module/context/get_schedule.h"
 #include "motis/module/context/motis_call.h"
 #include "motis/module/context/motis_publish.h"
@@ -65,7 +66,11 @@ uint32_t find_edge_idx(trip_data const* td,
           return e->to_->station_ == leg.exit_station_id_;
         }
       });
-  return distance(begin(td->edges_), result_edge);
+  if (result_edge != end(td->edges_)) {
+    return distance(begin(td->edges_), result_edge);
+  } else {
+    return std::numeric_limits<uint32_t>::max();
+  }
 }
 
 inline duration get_transfer_duration(std::optional<transfer_info> const& ti) {
@@ -117,10 +122,10 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
       for (auto const& cpg : same_dest_gr.second) {
         for (auto const& g : cpg.groups_) {
           for (auto& e : g->edges_) {
-            e->passengers_ -= g->passengers_;
-            if (e->passengers_ < 0) {
-              throw std::runtime_error("edge psgs less than 0");
+            if (e->passengers_ < g->passengers_) {
+              throw std::runtime_error("edge psgs less than group psgs");
             }
+            e->passengers_ -= g->passengers_;
           }
         }
       }
@@ -149,6 +154,37 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
 
   {
     scoped_timer alt_trips_timer{"add alternatives to graph"};
+    for (auto& cgs : combined_groups) {
+      for (auto& cpg : cgs.second) {
+        size_t curr_alt_ind = 0;
+        while (curr_alt_ind < cpg.alternatives_.size()) {
+          bool remove_alt = false;
+          for (auto const [leg_idx, leg] : utl::enumerate(
+                   cpg.alternatives_[curr_alt_ind].compact_journey_.legs_)) {
+            auto td = get_or_add_trip(sched, data, leg.trip_);
+            if (leg_idx <
+                cpg.alternatives_[curr_alt_ind].compact_journey_.legs_.size()) {
+              auto const leg_first_edge_idx = find_edge_idx(td, leg, true);
+              auto const leg_last_edge_idx = find_edge_idx(td, leg, false);
+              if (leg_first_edge_idx == std::numeric_limits<uint32_t>::max() ||
+                  leg_last_edge_idx == std::numeric_limits<uint32_t>::max()) {
+                remove_alt = true;
+                break;
+              }
+            }
+          }
+          if (remove_alt) {
+            cpg.alternatives_.erase(cpg.alternatives_.begin() + curr_alt_ind);
+          } else {
+            ++curr_alt_ind;
+          }
+        }
+      }
+    }
+  }
+
+  {
+    scoped_timer alt_inchs_timer{"add interchanges to graph"};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
         alternatives_found += cpg.alternatives_.size();

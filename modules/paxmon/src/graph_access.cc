@@ -228,7 +228,6 @@ void add_interchange_edge(event_node* from, event_node* to,
       return;
     }
   }
-
   add_edge(
       make_interchange_edge(from, to, transfer_time, 0, pax_connection_info{}));
 }
