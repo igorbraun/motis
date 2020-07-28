@@ -169,6 +169,7 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
               auto const leg_last_edge_idx = find_edge_idx(td, leg, false);
               if (leg_first_edge_idx == std::numeric_limits<uint32_t>::max() ||
                   leg_last_edge_idx == std::numeric_limits<uint32_t>::max()) {
+                throw std::runtime_error("Edge not in RSL graph");
                 remove_alt = true;
                 break;
               }
