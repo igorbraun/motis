@@ -64,6 +64,7 @@ void paxmon::init(motis::module::registry& reg) {
   add_shared_data(DATA_KEY, &data_);
 
   reg.subscribe("/init", [&]() {
+    create_cap_ILP_stats_file();
     load_capacity_files();
     load_journeys();
   });
@@ -387,6 +388,13 @@ void paxmon::rt_updates_applied() {
   stats_writer_->write_tick(tick_stats_);
   stats_writer_->flush();
   tick_stats_ = {};
+}
+void paxmon::create_cap_ILP_stats_file() {
+  std::ofstream stats_file("motis/build/rel/ilp_files/ILP_stats.csv");
+  stats_file
+      << "num_groups, run_time, num_vars, num_constraints, no_alt_found, obj"
+      << std::endl;
+  stats_file.close();
 }
 
 }  // namespace motis::paxmon

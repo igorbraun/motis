@@ -152,11 +152,11 @@ cap_ILP_solution build_ILP_from_scenario_API(
     }
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-    model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
+    // model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
 
     model.optimize();
 
-    model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
+    // model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
 
     int status = model.get(GRB_IntAttr_Status);
     if (status != GRB_OPTIMAL) {

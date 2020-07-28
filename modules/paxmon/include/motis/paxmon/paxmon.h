@@ -32,6 +32,7 @@ private:
   void load_journeys();
   std::size_t load_journeys(std::string const& file);
   void load_capacity_files();
+  void create_cap_ILP_stats_file();
   motis::module::msg_ptr rt_update(motis::module::msg_ptr const& msg);
   void rt_updates_applied();
 

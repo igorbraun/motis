@@ -1,5 +1,6 @@
 #include "motis/paxassign/paxassign.h"
 
+#include <iosfwd>
 #include <iostream>
 
 #include "motis/core/common/date_time_util.h"
@@ -314,9 +315,19 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
     std::srand(std::time(nullptr));
     int random_variable = std::rand();
     std::cout << "BUILDING & SOLVING " << random_variable << std::endl;
-    build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
-                                std::to_string(cap_ILP_scenario.size()) + "_" +
-                                    std::to_string(random_variable));
+    auto sol =
+        build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
+                                    std::to_string(cap_ILP_scenario.size()) +
+                                        "_" + std::to_string(random_variable));
+
+    std::ofstream stats_file;
+    stats_file.open("motis/build/rel/ilp_files/ILP_stats.csv",
+                    std::ios_base::app);
+    stats_file << sol.stats_.num_groups_ << "," << sol.stats_.run_time_ << ","
+               << sol.stats_.num_vars_ << "," << sol.stats_.num_constraints_
+               << "," << sol.stats_.no_alt_found_ << "," << sol.stats_.obj_
+               << std::endl;
+    stats_file.close();
   }
 
   {
