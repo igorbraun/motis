@@ -315,7 +315,8 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
     int random_variable = std::rand();
     std::cout << "BUILDING & SOLVING " << random_variable << std::endl;
     build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
-                                std::to_string(random_variable));
+                                std::to_string(cap_ILP_scenario.size()) + "_" +
+                                    std::to_string(random_variable));
   }
 
   {

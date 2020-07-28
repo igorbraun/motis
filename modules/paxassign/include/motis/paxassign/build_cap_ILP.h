@@ -8,7 +8,7 @@
 
 namespace motis::paxassign {
 
-std::vector<uint16_t> build_ILP_from_scenario_API(
+cap_ILP_solution build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
     cap_ILP_config const& config, std::string const& scenario_id) {
   try {
@@ -163,19 +163,31 @@ std::vector<uint16_t> build_ILP_from_scenario_API(
       throw std::runtime_error("capacitated ILP model: solution not optimal");
     }
 
-    std::cout << "Obj: " << model.get(GRB_DoubleAttr_ObjVal) << std::endl;
-
     std::vector<uint16_t> alt_to_use;
+    int no_alt = 0;
+
     for (auto const& pg : passengers) {
       uint16_t i = 0;
       for (auto const& curr_alt : alt_route_vars[pg.id_]) {
         if (curr_alt.get(GRB_DoubleAttr_X) == 1.0) {
+          if (i == alt_route_vars[pg.id_].size() - 1) {
+            ++no_alt;
+          }
           alt_to_use.push_back(i);
           break;
         }
+        ++i;
       }
     }
-    return alt_to_use;
+
+    cap_ILP_solution solution{
+        cap_ILP_stats{passengers.size(), no_alt, model.get(GRB_IntAttr_NumVars),
+                      model.get(GRB_IntAttr_NumGenConstrs) +
+                          model.get(GRB_IntAttr_NumConstrs),
+                      model.get(GRB_DoubleAttr_Runtime),
+                      model.get(GRB_DoubleAttr_ObjVal)},
+        alt_to_use};
+    return solution;
 
   } catch (GRBException e) {
     std::cout << "Error code = " << e.getErrorCode() << std::endl;

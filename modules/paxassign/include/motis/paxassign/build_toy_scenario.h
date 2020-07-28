@@ -64,12 +64,18 @@ void build_toy_scenario() {
   std::vector<cap_ILP_psg_group> psg_groups{pg1, pg2, pg3, pg4};
   cap_ILP_config config;
   // build_ILP_from_scenario(psg_groups, config, "1");
-  auto psg_assignment = build_ILP_from_scenario_API(psg_groups, config, "1");
+  auto sol = build_ILP_from_scenario_API(psg_groups, config, "1");
   for (auto i = 0u; i < psg_groups.size(); ++i) {
     std::cout << "pg " << psg_groups[i].id_ << " should use "
-              << psg_groups[i].alternatives_[psg_assignment[i]].id_
+              << psg_groups[i].alternatives_[sol.alt_to_use_[i]].id_
               << std::endl;
   }
+  std::cout << "Solution statistics:" << std::endl;
+  std::cout << "Obj: " << sol.stats_.obj_ << std::endl;
+  std::cout << "Group nr: " << sol.stats_.num_groups_ << std::endl;
+  std::cout << "Variables: " << sol.stats_.num_vars_ << std::endl;
+  std::cout << "Constraints: " << sol.stats_.num_constraints_ << std::endl;
+  std::cout << "Run time: " << sol.stats_.run_time_ << std::endl;
 }
 
 }  // namespace motis::paxassign

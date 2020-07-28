@@ -31,4 +31,18 @@ struct cap_ILP_config {
   uint32_t const no_route_cost_ = 100000;
 };
 
+struct cap_ILP_stats {
+  unsigned long num_groups_;
+  int no_alt_found_;
+  int num_vars_;
+  int num_constraints_;
+  double run_time_;
+  double obj_;
+};
+
+struct cap_ILP_solution {
+  cap_ILP_stats stats_;
+  std::vector<uint16_t> alt_to_use_;
+};
+
 }  // namespace motis::paxassign
