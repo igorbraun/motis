@@ -154,6 +154,20 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   }
 
   {
+    scoped_timer no_alt_timer{"remove cpg with no alternatives"};
+    for (auto& cgs : combined_groups) {
+      uint32_t cpg_idx = 0;
+      while (cpg_idx < cgs.second.size()) {
+        if (cgs.second[cpg_idx].alternatives_.empty()) {
+          cgs.second.erase(cgs.second.begin() + cpg_idx);
+        } else {
+          ++cpg_idx;
+        }
+      }
+    }
+  }
+
+  {
     scoped_timer alt_trips_timer{"add alternatives to graph"};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
@@ -163,16 +177,12 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
           for (auto const [leg_idx, leg] : utl::enumerate(
                    cpg.alternatives_[curr_alt_ind].compact_journey_.legs_)) {
             auto td = get_or_add_trip(sched, data, leg.trip_);
-            if (leg_idx <
-                cpg.alternatives_[curr_alt_ind].compact_journey_.legs_.size()) {
-              auto const leg_first_edge_idx = find_edge_idx(td, leg, true);
-              auto const leg_last_edge_idx = find_edge_idx(td, leg, false);
-              if (leg_first_edge_idx == std::numeric_limits<uint32_t>::max() ||
-                  leg_last_edge_idx == std::numeric_limits<uint32_t>::max()) {
-                throw std::runtime_error("Edge not in RSL graph");
-                remove_alt = true;
-                break;
-              }
+            auto const leg_first_edge_idx = find_edge_idx(td, leg, true);
+            auto const leg_last_edge_idx = find_edge_idx(td, leg, false);
+            if (leg_first_edge_idx == std::numeric_limits<uint32_t>::max() ||
+                leg_last_edge_idx == std::numeric_limits<uint32_t>::max()) {
+              remove_alt = true;
+              break;
             }
           }
           if (remove_alt) {
@@ -246,12 +256,16 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
               }
 
               if (cap_edges.find(td->edges_[i]) == cap_edges.end()) {
+                uint32_t remaining_cap =
+                    (td->edges_[i]->capacity() < td->edges_[i]->passengers_)
+                        ? 0
+                        : td->edges_[i]->capacity() -
+                              td->edges_[i]->passengers_;
                 cap_edges[td->edges_[i]] = cap_ILP_edge{
                     curr_e_id++,
                     static_cast<uint32_t>(td->edges_[i]->to_->current_time() -
                                           td->edges_[i]->from_->current_time()),
-                    td->edges_[i]->capacity() - td->edges_[i]->passengers_,
-                    edge_type::TRIP};
+                    remaining_cap, edge_type::TRIP};
               }
               curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
 
@@ -262,12 +276,16 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
                   if (oe->type_ == motis::paxmon::edge_type::WAIT &&
                       oe->to_ == td->edges_[i + 1]->from_) {
                     if (cap_edges.find(oe.get()) == cap_edges.end()) {
+                      uint32_t remaining_cap =
+                          (oe->capacity() < oe->passengers_)
+                              ? 0
+                              : oe->capacity() - oe->passengers_;
                       cap_edges[oe.get()] = cap_ILP_edge{
                           curr_e_id++,
                           static_cast<uint32_t>(
                               td->edges_[i + 1]->from_->current_time() -
                               td->edges_[i]->to_->current_time()),
-                          oe->capacity() - oe->passengers_, edge_type::WAIT};
+                          remaining_cap, edge_type::WAIT};
                     }
                     curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
                   }
