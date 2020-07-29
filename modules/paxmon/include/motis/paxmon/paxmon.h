@@ -30,6 +30,7 @@ struct paxmon : public motis::module::module {
 
 private:
   void load_journeys();
+  void adapt_capacities_to_jrns();
   std::size_t load_journeys(std::string const& file);
   void load_capacity_files();
   void create_cap_ILP_stats_file();

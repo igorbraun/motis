@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <random>
 #include <set>
 
 #include "boost/filesystem.hpp"
@@ -67,6 +68,7 @@ void paxmon::init(motis::module::registry& reg) {
     create_cap_ILP_stats_file();
     load_capacity_files();
     load_journeys();
+    adapt_capacities_to_jrns();
   });
   reg.register_op("/paxmon/flush", [&](msg_ptr const&) -> msg_ptr {
     stats_writer_->flush();
@@ -395,6 +397,26 @@ void paxmon::create_cap_ILP_stats_file() {
       << "num_groups, run_time, num_vars, num_constraints, no_alt_found, obj"
       << std::endl;
   stats_file.close();
+}
+
+void paxmon::adapt_capacities_to_jrns() {
+  std::uniform_real_distribution<double> dist(0.60, 1.2);  //(min, max)
+  std::mt19937 rng;
+  rng.seed(std::random_device{}());
+
+  for (auto& td : data_.graph_.trip_data_) {
+    auto max_psgs_edge =
+        std::max_element(begin(td.second->edges_), end(td.second->edges_),
+                         [](edge const* lhs, edge const* rhs) {
+                           return lhs->passengers_ < rhs->passengers_;
+                         });
+    auto new_cap =
+        static_cast<std::uint16_t>((*max_psgs_edge)->passengers_ / dist(rng));
+    for (auto& e : td.second->edges_) {
+      e->encoded_capacity_ =
+          encode_capacity(new_cap, capacity_source::TRAIN_NR);
+    }
+  }
 }
 
 }  // namespace motis::paxmon
