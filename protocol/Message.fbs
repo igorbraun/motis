@@ -72,6 +72,7 @@ include "rt/RtWriteGraphRequest.fbs";
 include "tripbased/TripBasedTripDebugRequest.fbs";
 include "tripbased/TripBasedTripDebugResponse.fbs";
 include "paxmon/MonitoringUpdate.fbs";
+include "paxassign/ConnAssignment.fbs";
 include "paxforecast/PassengerForecast.fbs";
 
 include "HTTPMessage.fbs";
@@ -214,7 +215,8 @@ union MsgContent {
   motis.tripbased.TripBasedTripDebugRequest                               = 094,
   motis.tripbased.TripBasedTripDebugResponse                              = 095,
   motis.paxmon.MonitoringUpdate                                           = 096,
-  motis.paxforecast.PassengerForecast                                     = 097
+  motis.paxforecast.PassengerForecast                                     = 097,
+  motis.paxassign.ConnAssignments                                         = 098
 }
 
 // Destination Examples:

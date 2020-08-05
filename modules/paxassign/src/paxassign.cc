@@ -12,15 +12,18 @@
 #include "motis/module/context/motis_publish.h"
 #include "motis/module/context/motis_spawn.h"
 #include "motis/module/message.h"
+#include "motis/paxmon/messages.h"
 
 #include "motis/paxforecast/messages.h"
 
 #include "motis/paxmon/build_graph.h"
 #include "motis/paxmon/data_key.h"
 #include "motis/paxmon/graph_access.h"
+#include "motis/paxmon/loader/journeys/to_compact_journey.h"
 #include "motis/paxmon/messages.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
+#include "../../../build/rel/generated/motis/protocol/Message_generated.h"
 
 using namespace motis::module;
 using namespace motis::logging;
@@ -223,16 +226,17 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
 
+  std::map<uint32_t, combined_passenger_group*> cap_ilp_psg_to_cpg;
   uint32_t curr_cpg_id = 1;
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
   cap_ILP_edge no_route_edge{curr_e_id++, 100000, 100000, edge_type::NOROUTE};
 
+  std::vector<cap_ILP_psg_group> cap_ILP_scenario;
+  cap_ILP_config ILP_config{};
   {
-    scoped_timer alt_timer{"build capacitated model"};
-    std::vector<cap_ILP_psg_group> cap_ILP_scenario;
-    cap_ILP_config ILP_config{};
+    scoped_timer alt_timer{"build data for capacitated model"};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
         std::vector<cap_ILP_connection> cpg_ILP_connections;
@@ -326,28 +330,32 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
         }
         cpg_ILP_connections.push_back(cap_ILP_connection{
             curr_alt_id++, ILP_config.no_route_cost_, {&no_route_edge}});
+        cap_ilp_psg_to_cpg[curr_cpg_id] = &cpg;
         cap_ILP_scenario.push_back(cap_ILP_psg_group{
             curr_cpg_id++, cpg_ILP_connections, cpg.passengers_});
       }
     }
+  }
 
+  cap_ILP_solution sol;
+  {
+    scoped_timer alt_timer{"solve capacitated model"};
     std::srand(std::time(nullptr));
     int random_variable = std::rand();
-    std::cout << "BUILDING & SOLVING " << random_variable << std::endl;
-    auto sol =
-        build_ILP_from_scenario_API(cap_ILP_scenario, cap_ILP_config{},
+    sol =
+        build_ILP_from_scenario_API(cap_ILP_scenario, ILP_config,
                                     std::to_string(cap_ILP_scenario.size()) +
                                         "_" + std::to_string(random_variable));
-
-    std::ofstream stats_file;
-    stats_file.open("motis/build/rel/ilp_files/ILP_stats.csv",
-                    std::ios_base::app);
-    stats_file << sol.stats_.num_groups_ << "," << sol.stats_.run_time_ << ","
-               << sol.stats_.num_vars_ << "," << sol.stats_.num_constraints_
-               << "," << sol.stats_.no_alt_found_ << "," << sol.stats_.obj_
-               << std::endl;
-    stats_file.close();
   }
+
+  std::ofstream stats_file;
+  stats_file.open("motis/build/rel/ilp_files/ILP_stats.csv",
+                  std::ios_base::app);
+  stats_file << sol.stats_.num_groups_ << "," << sol.stats_.run_time_ << ","
+             << sol.stats_.num_vars_ << "," << sol.stats_.num_constraints_
+             << "," << sol.stats_.no_alt_found_ << "," << sol.stats_.obj_
+             << std::endl;
+  stats_file.close();
 
   {
     scoped_timer pg_assignments{"assign psgs back to edges"};
@@ -361,6 +369,32 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
       }
     }
   }
+
+  message_creator mc;
+  std::vector<flatbuffers::Offset<ConnAssignment>> fbs_assignments;
+
+  for (auto& assignment : sol.alt_to_use_) {
+    if (cap_ilp_psg_to_cpg[assignment.first]->alternatives_.size() <=
+        assignment.second) {
+      fbs_assignments.emplace_back(CreateConnAssignment(
+          mc, assignment.first, to_fbs(sched, mc, compact_journey{})));
+    } else {
+      auto cj = motis::paxmon::to_compact_journey(
+          cap_ilp_psg_to_cpg[assignment.first]
+              ->alternatives_[assignment.second]
+              .journey_,
+          sched);
+      fbs_assignments.emplace_back(
+          CreateConnAssignment(mc, assignment.first, to_fbs(sched, mc, cj)));
+    }
+  }
+
+  using namespace motis;
+  mc.create_and_finish(
+      MsgContent_ConnAssignments,
+      CreateConnAssignments(mc, mc.CreateVector(fbs_assignments)).Union(),
+      "/paxassign/ilp_result");
+  ctx::await_all(motis_publish(make_msg(mc)));
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {

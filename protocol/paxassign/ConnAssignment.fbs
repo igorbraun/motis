@@ -1,0 +1,12 @@
+include "paxmon/CompactJourney.fbs";
+
+namespace motis.paxassign;
+
+table ConnAssignment {
+  psg_id : uint;
+  conn : motis.paxmon.CompactJourney;
+}
+
+table ConnAssignments {
+  assignments: [ConnAssignment];
+}
