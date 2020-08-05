@@ -20,11 +20,23 @@ struct journey_leg {
   std::optional<transfer_info> enter_transfer_;
 };
 
+inline bool operator==(journey_leg const& lhs, journey_leg const& rhs) {
+  return lhs.trip_ == rhs.trip_ &&
+         lhs.enter_station_id_ == rhs.enter_station_id_ &&
+         lhs.exit_station_id_ == rhs.exit_station_id_ &&
+         lhs.enter_time_ == rhs.enter_time_ &&
+         lhs.exit_time_ == rhs.exit_time_;
+}
+
 struct compact_journey {
   std::vector<journey_leg> legs_;
 
   inline unsigned destination_station_id() const {
     return legs_.back().exit_station_id_;
+  }
+
+  bool operator==(compact_journey const& another_cj) {
+    return legs_ == another_cj.legs_;
   }
 };
 
