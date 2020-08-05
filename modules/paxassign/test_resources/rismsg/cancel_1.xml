@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<Paket TOut="20190730120000">
+  <ListNachricht>
+    <Nachricht>
+      <Ausfall>
+        <Service IdBfEvaNr="0000001" IdZeit="20190730100000" IdZNr="1" Zielzeit="20190730170000">
+          <ListZug>
+            <Zug Nr="1">
+              <ListZE>
+                <ZE Typ="Ab" Status="Ausf">
+                  <Bf EvaNr="0000004" Name="D"/>
+                  <Zeit Soll="20190730130000"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="An" Status="Ausf">
+                  <Bf EvaNr="0000005" Name="E"/>
+                  <Zeit Soll="20190730135500"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="Ab" Status="Ausf">
+                  <Bf EvaNr="0000005" Name="E"/>
+                  <Zeit Soll="20190730140000"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="An" Status="Ausf">
+                  <Bf EvaNr="0000006" Name="F"/>
+                  <Zeit Soll="20190730145500"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="Ab" Status="Ausf">
+                  <Bf EvaNr="0000006" Name="F"/>
+                  <Zeit Soll="20190730150000"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="An" Status="Ausf">
+                  <Bf EvaNr="0000007" Name="G"/>
+                  <Zeit Soll="20190730155500"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="Ab" Status="Ausf">
+                  <Bf EvaNr="0000007" Name="G"/>
+                  <Zeit Soll="20190730160000"/>
+                  <Gleis Soll=""/>
+                </ZE>
+                <ZE Typ="An" Status="Ausf">
+                  <Bf EvaNr="0000008" Name="H"/>
+                  <Zeit Soll="20190730170000"/>
+                  <Gleis Soll=""/>
+                </ZE>
+              </ListZE>
+            </Zug>
+          </ListZug>
+        </Service>
+      </Ausfall>
+      <ListQuelle/>
+    </Nachricht>
+  </ListNachricht>
+</Paket>

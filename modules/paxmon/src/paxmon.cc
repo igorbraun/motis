@@ -68,7 +68,7 @@ void paxmon::init(motis::module::registry& reg) {
     create_cap_ILP_stats_file();
     load_capacity_files();
     load_journeys();
-    adapt_capacities_to_jrns();
+    //adapt_capacities_to_jrns();
   });
   reg.register_op("/paxmon/flush", [&](msg_ptr const&) -> msg_ptr {
     stats_writer_->flush();
