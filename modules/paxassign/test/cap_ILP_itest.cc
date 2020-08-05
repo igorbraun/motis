@@ -61,6 +61,22 @@ TEST_F(cap_ilp_test, ILP_result_test) {
     compact_journey desired_alternative_;
   };
 
+  /* Tested scenarios:
+   * - psg1 is affected by a train cancellation and should
+   * proceed his journey with the fastest alternative from two possible.
+   * - psg2 is a group of 140 people, psg3 a group of 100 people are in the same
+   * ICE (default capacity of 340). Affected by a train cancellation, the groups
+   * should be rerouted. There are two alternatives with IC trains, each of
+   * which has the default capacity of 140. The bigger group psg2 will proceed
+   * the journey with a slightly faster alternative (because the cumulative
+   * costs are minimized are way), the psg3 takes the slower alternative.
+   * - psg4 is a group of 140 people, psg5 is a group of 50 people are in the
+   * same ICE with a default capacity of 340. Affected by a train cancellation,
+   * the groups should be rerouted. There is only one alternative possible with
+   * a IC of capacity 140. The psg4 gets the alternative and psg5 gets no
+   * alternative due to capacity reasons.
+   */
+
   std::vector<scenario_psg> expected_result{
       scenario_psg{
           1, compact_journey{std::vector<journey_leg>{
