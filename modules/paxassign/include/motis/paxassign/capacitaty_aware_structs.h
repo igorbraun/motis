@@ -17,8 +17,10 @@ struct cap_ILP_connection {
   std::vector<cap_ILP_edge*> edges_;
 };
 
+using ilp_psg_id = uint32_t;
+
 struct cap_ILP_psg_group {
-  uint32_t id_;
+  ilp_psg_id id_;
   std::vector<cap_ILP_connection> alternatives_;
   int psg_count_;
 };
@@ -27,7 +29,7 @@ struct cap_ILP_config {
   std::vector<double> cost_function_capacity_steps_{0.65, 1.0, 1.2};
   std::vector<double> tt_and_waiting_penalties_{1.0, 1.2, 2.0};
 
-  double const transfer_penalty_ = 0;
+  double const transfer_penalty_ = 20;
   uint32_t const no_route_cost_ = 100000;
 };
 
@@ -40,9 +42,11 @@ struct cap_ILP_stats {
   double obj_;
 };
 
+using alt_idx = uint32_t;
+
 struct cap_ILP_solution {
   cap_ILP_stats stats_;
-  std::vector<uint16_t> alt_to_use_;
+  std::vector<std::pair<ilp_psg_id, alt_idx>> alt_to_use_;
 };
 
 }  // namespace motis::paxassign

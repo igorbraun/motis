@@ -163,17 +163,17 @@ cap_ILP_solution build_ILP_from_scenario_API(
       throw std::runtime_error("capacitated ILP model: solution not optimal");
     }
 
-    std::vector<uint16_t> alt_to_use;
+    std::vector<std::pair<ilp_psg_id, alt_idx>> alt_to_use;
     int no_alt = 0;
 
     for (auto const& pg : passengers) {
-      uint16_t i = 0;
+      uint32_t i = 0;
       for (auto const& curr_alt : alt_route_vars[pg.id_]) {
         if (curr_alt.get(GRB_DoubleAttr_X) == 1.0) {
           if (i == alt_route_vars[pg.id_].size() - 1) {
             ++no_alt;
           }
-          alt_to_use.push_back(i);
+          alt_to_use.push_back({pg.id_, i});
           break;
         }
         ++i;

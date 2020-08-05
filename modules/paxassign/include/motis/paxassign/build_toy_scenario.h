@@ -67,7 +67,7 @@ void build_toy_scenario() {
   auto sol = build_ILP_from_scenario_API(psg_groups, config, "1");
   for (auto i = 0u; i < psg_groups.size(); ++i) {
     std::cout << "pg " << psg_groups[i].id_ << " should use "
-              << psg_groups[i].alternatives_[sol.alt_to_use_[i]].id_
+              << psg_groups[i].alternatives_[sol.alt_to_use_[i].second].id_
               << std::endl;
   }
   std::cout << "Solution statistics:" << std::endl;
