@@ -12,6 +12,7 @@
 #include "motis/module/context/motis_publish.h"
 #include "motis/module/context/motis_spawn.h"
 #include "motis/module/message.h"
+#include "motis/paxassign/time_expanded_graph.h"
 #include "motis/paxmon/messages.h"
 
 #include "motis/paxforecast/messages.h"
@@ -50,7 +51,8 @@ void paxassign::init(motis::module::registry& reg) {
   });
 
   reg.subscribe("/paxmon/monitoring_update", [&](msg_ptr const& msg) {
-    on_monitoring(msg);
+    // whole_graph_ilp_assignment(msg);
+    on_monitor(msg);
     return nullptr;
   });
 }
@@ -81,7 +83,7 @@ inline duration get_transfer_duration(std::optional<transfer_info> const& ti) {
   return ti.has_value() ? ti.value().duration_ : 0;
 }
 
-void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
+void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   auto const& sched = get_schedule();
   auto& data = *get_shared_data<paxmon_data*>(motis::paxmon::DATA_KEY);
 
@@ -119,6 +121,14 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
   if (combined_groups.empty()) {
     return;
   }
+
+  // cap_ilp_assignment(combined_groups, data, sched);
+  whole_graph_ilp_assignment(combined_groups, data, sched);
+}
+
+void paxassign::cap_ilp_assignment(
+    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
 
   {
     scoped_timer withdraw_pg_assignments{"withdraw pg assignments"};
@@ -395,6 +405,12 @@ void paxassign::on_monitoring(const motis::module::msg_ptr& msg) {
       CreateConnAssignments(mc, mc.CreateVector(fbs_assignments)).Union(),
       "/paxassign/ilp_result");
   ctx::await_all(motis_publish(make_msg(mc)));
+}
+
+void paxassign::whole_graph_ilp_assignment(
+    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+  build_time_expanded_graph(data, sched);
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
