@@ -10,7 +10,7 @@ namespace motis::paxassign {
 
 cap_ILP_solution build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
-    cap_ILP_config const& config, std::string const& scenario_id) {
+    cap_ILP_config const& config, std::string const&) {
   try {
     std::set<cap_ILP_edge const*> handled_edges;
     std::map<uint32_t, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
