@@ -12,7 +12,6 @@
 #include "motis/module/context/motis_publish.h"
 #include "motis/module/context/motis_spawn.h"
 #include "motis/module/message.h"
-#include "motis/paxassign/time_expanded_graph.h"
 #include "motis/paxmon/messages.h"
 
 #include "motis/paxforecast/messages.h"
@@ -22,6 +21,9 @@
 #include "motis/paxmon/graph_access.h"
 #include "motis/paxmon/loader/journeys/to_compact_journey.h"
 #include "motis/paxmon/messages.h"
+
+#include "motis/paxassign/build_time_exp_graph.h"
+#include "motis/paxassign/time_expanded_graph.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
 #include "../../../build/rel/generated/motis/protocol/Message_generated.h"
