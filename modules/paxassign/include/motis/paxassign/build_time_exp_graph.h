@@ -34,8 +34,7 @@ inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
 }
 
 void add_interchange(eg_event_node* from, eg_event_node* to,
-                     duration transfer_time, time_expanded_graph const& g,
-                     std::vector<eg_edge*>& interchange_edges) {
+                     duration transfer_time, time_expanded_graph& g) {
   for (auto& e : from->out_edges_) {
     if (e->type_ == eg_edge_type::INTERCHANGE && e->to_ == to &&
         e->transfer_time_ == transfer_time) {
@@ -43,7 +42,7 @@ void add_interchange(eg_event_node* from, eg_event_node* to,
       return;
     }
   }
-  interchange_edges.emplace_back(
+  g.interchange_edges_.emplace_back(
       add_edge(make_interchange_edge(from, to, transfer_time)));
 }
 
@@ -64,13 +63,18 @@ std::vector<eg_edge*> add_trip(
                                           event_type::DEP,
                                           section.from_station_id(),
                                           {},
-                                          {}}))
+                                          {},
+                                          g.nodes_.size()}))
                         .get();
-    auto arr_node =
-        g.nodes_
-            .emplace_back(std::make_unique<eg_event_node>(eg_event_node{
-                lc.a_time_, event_type::ARR, section.to_station_id(), {}, {}}))
-            .get();
+    auto arr_node = g.nodes_
+                        .emplace_back(std::make_unique<eg_event_node>(
+                            eg_event_node{lc.a_time_,
+                                          event_type::ARR,
+                                          section.to_station_id(),
+                                          {},
+                                          {},
+                                          g.nodes_.size()}))
+                        .get();
     auto const encoded_capacity = encode_capacity(get_capacity(
         sched, lc, trip_capacity_map, category_capacity_map, default_capacity));
     edges.emplace_back(add_edge(make_trip_edge(
@@ -160,19 +164,18 @@ eg_event_node* find_event_node(light_connection const* l_conn,
 void build_interchange_edges(
     light_connection const* from_l_conn,
     std::vector<light_connection const*> const& to_l_conns,
-    schedule const& sched, time_expanded_graph& g,
-    std::vector<eg_edge*>& interchange_edges) {
+    schedule const& sched, time_expanded_graph& g) {
   auto from_n = find_event_node(from_l_conn, motis::event_type::ARR, g, sched);
   for (auto const c : to_l_conns) {
     auto to_n = find_event_node(c, motis::event_type::DEP, g, sched);
     duration const inch_duration = to_n->time_ - from_n->time_;
-    add_interchange(from_n, to_n, inch_duration, g, interchange_edges);
+    add_interchange(from_n, to_n, inch_duration, g);
   }
 }
 
-void build_time_expanded_graph(paxmon_data const& data, schedule const& sched) {
+time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
+                                              schedule const& sched) {
   time_expanded_graph graph;
-  std::vector<eg_edge*> interchange_edges;
 
   trip_capacity_map_t trip_capacity_map{data.trip_capacity_map_};
   category_capacity_map_t category_capacity_map{data.category_capacity_map_};
@@ -185,13 +188,6 @@ void build_time_expanded_graph(paxmon_data const& data, schedule const& sched) {
                       default_capacity);
     }
   }
-
-  std::cout << "Edges before interchanges: " << std::endl;
-  std::cout << std::accumulate(graph.nodes_.begin(), graph.nodes_.end(), 0.0,
-                               [](double sum, auto& n) {
-                                 return sum + n->in_edges_.size();
-                               })
-            << std::endl;
 
   for (auto const& sn : sched.station_nodes_) {
     for (auto const& e : sn->edges_) {
@@ -209,37 +205,14 @@ void build_time_expanded_graph(paxmon_data const& data, schedule const& sched) {
               sn.get(), c.a_time_ + sched.stations_[sn->id_]->transfer_time_,
               c);
           if (!rel_l_conns.empty()) {
-            build_interchange_edges(&c, rel_l_conns, sched, graph,
-                                    interchange_edges);
+            build_interchange_edges(&c, rel_l_conns, sched, graph);
           }
         }
       }
     }
   }
 
-  std::cout << "Edges after interchanges: " << std::endl;
-  std::cout << std::accumulate(graph.nodes_.begin(), graph.nodes_.end(), 0.0,
-                               [](double sum, auto& n) {
-                                 return sum + n->in_edges_.size();
-                               })
-            << std::endl;
-  std::for_each(graph.nodes_.begin(), graph.nodes_.end(),
-                [](std::unique_ptr<eg_event_node>& n) {
-                  for (auto const e : n->in_edges_) {
-                    if (e->type_ == eg_edge_type::INTERCHANGE) {
-                      std::cout << "inch edge from " << e->from_->type_
-                                << " to " << e->to_->type_ << ", from time "
-                                << e->from_->time_ << " to time "
-                                << e->to_->time_
-                                << ", transfer time: " << e->transfer_time_
-                                << std::endl;
-                    }
-                  }
-
-                  n->out_edges_;
-                });
-
-  throw std::runtime_error("I build time expanded graph");
+  return graph;
 }
 
 }  // namespace motis::paxassign

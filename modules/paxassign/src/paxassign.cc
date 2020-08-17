@@ -409,10 +409,85 @@ void paxassign::cap_ilp_assignment(
   ctx::await_all(motis_publish(make_msg(mc)));
 }
 
+void build_and_solve_wg_ilp(eg_event_node* from, eg_event_node* to,
+                            time_expanded_graph& te_graph) {
+  // TODO: no route edges to te_graph in previous function
+}
+
 void paxassign::whole_graph_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
-  build_time_expanded_graph(data, sched);
+  auto te_graph = build_time_expanded_graph(data, sched);
+
+  std::for_each(te_graph.nodes_.begin(), te_graph.nodes_.end(),
+                [](std::unique_ptr<eg_event_node>& n) {
+                  for (auto const e : n->in_edges_) {
+                    if (e->type_ == eg_edge_type::INTERCHANGE) {
+                      std::cout << "inch edge from " << e->from_->type_
+                                << " to " << e->to_->type_ << ", from time "
+                                << e->from_->time_ << " to time "
+                                << e->to_->time_
+                                << ", transfer time: " << e->transfer_time_
+                                << std::endl;
+                    }
+                  }
+                });
+
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      // TODO: handle also passengers, which are not in trip yet
+      if (cpg.localization_.in_trip()) {
+        eg_event_node* at_ev_node = nullptr;
+        auto tr_data = te_graph.trip_data_.find(
+            to_extern_trip(sched, cpg.localization_.in_trip_));
+        if (tr_data != te_graph.trip_data_.end()) {
+        }
+        auto at_edge = std::find_if(
+            std::begin(tr_data->second->edges_),
+            std::end(tr_data->second->edges_), [&cpg](eg_edge* e_ptr) {
+              return e_ptr->to_->station_ ==
+                         cpg.localization_.at_station_->index_ &&
+                     cpg.localization_.arrival_time_ == e_ptr->to_->time_;
+            });
+        if (at_edge != tr_data->second->edges_.end()) {
+          at_ev_node = (*at_edge)->to_;
+        }
+
+        if (at_ev_node != nullptr) {
+          auto target_node = te_graph.nodes_
+                                 .emplace_back(std::make_unique<eg_event_node>(
+                                     eg_event_node{INVALID_TIME,
+                                                   event_type::ARR,
+                                                   cpg.destination_station_id_,
+                                                   {},
+                                                   {},
+                                                   te_graph.nodes_.size()}))
+                                 .get();
+
+          for (auto& n : te_graph.nodes_) {
+            if (n.get() != target_node &&
+                n->station_ == cpg.destination_station_id_ &&
+                n->type_ == event_type::ARR) {
+              motis::paxassign::add_interchange(n.get(), target_node, 0,
+                                                te_graph);
+            }
+          }
+
+          build_and_solve_wg_ilp(at_ev_node, target_node, te_graph);
+        }
+      }
+    }
+  }
+
+  std::cout << "Edges after interchanges to dummies: " << std::endl;
+  std::cout << std::accumulate(te_graph.nodes_.begin(), te_graph.nodes_.end(),
+                               0.0,
+                               [](double sum, auto& n) {
+                                 return sum + n->in_edges_.size();
+                               })
+            << std::endl;
+
+  throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {

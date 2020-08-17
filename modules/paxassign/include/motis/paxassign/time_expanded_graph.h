@@ -11,6 +11,7 @@ struct eg_event_node {
   std::uint32_t station_{0};
   std::vector<std::unique_ptr<eg_edge>> out_edges_;
   std::vector<eg_edge*> in_edges_;
+  size_t id_;
 };
 
 enum class eg_edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT };
@@ -47,6 +48,7 @@ struct eg_trip_data {
 struct time_expanded_graph {
   std::vector<std::unique_ptr<eg_event_node>> nodes_;
   mcd::hash_map<extern_trip, std::unique_ptr<eg_trip_data>> trip_data_;
+  std::vector<eg_edge*> interchange_edges_;
 };
 
 }  // namespace motis::paxassign
