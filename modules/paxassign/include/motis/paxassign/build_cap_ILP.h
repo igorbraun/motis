@@ -2,6 +2,8 @@
 
 #include "motis/paxassign/capacitaty_aware_structs.h"
 
+#include <fstream>
+
 #include "utl/enumerate.h"
 
 #include "gurobi_c++.h"

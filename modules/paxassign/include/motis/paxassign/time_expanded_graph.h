@@ -14,7 +14,7 @@ struct eg_event_node {
   size_t id_;
 };
 
-enum class eg_edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT };
+enum class eg_edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT, NO_ROUTE };
 
 inline std::ostream& operator<<(std::ostream& out, eg_edge_type const et) {
   switch (et) {

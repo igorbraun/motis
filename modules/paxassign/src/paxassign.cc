@@ -22,7 +22,9 @@
 #include "motis/paxmon/loader/journeys/to_compact_journey.h"
 #include "motis/paxmon/messages.h"
 
+#include "motis/paxassign/build_cap_ILP.h"
 #include "motis/paxassign/build_time_exp_graph.h"
+#include "motis/paxassign/build_whole_graph_ilp.h"
 #include "motis/paxassign/time_expanded_graph.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
@@ -409,11 +411,6 @@ void paxassign::cap_ilp_assignment(
   ctx::await_all(motis_publish(make_msg(mc)));
 }
 
-void build_and_solve_wg_ilp(eg_event_node* from, eg_event_node* to,
-                            time_expanded_graph& te_graph) {
-  // TODO: no route edges to te_graph in previous function
-}
-
 void paxassign::whole_graph_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
@@ -473,7 +470,7 @@ void paxassign::whole_graph_ilp_assignment(
             }
           }
 
-          build_and_solve_wg_ilp(at_ev_node, target_node, te_graph);
+          build_whole_graph_ilp(at_ev_node, target_node, te_graph);
         }
       }
     }
