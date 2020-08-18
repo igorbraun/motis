@@ -23,19 +23,28 @@ inline eg_edge* add_edge(eg_edge const& e) {
 
 inline eg_edge make_interchange_edge(eg_event_node* from, eg_event_node* to,
                                      uint32_t transfer_time) {
-  return eg_edge{from,          to, eg_edge_type::INTERCHANGE,
-                 transfer_time, 0,  nullptr};
+  return eg_edge{from,
+                 to,
+                 eg_edge_type::INTERCHANGE,
+                 transfer_time,
+                 std::numeric_limits<std::uint16_t>::max(),
+                 nullptr};
 }
 
 inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
                               eg_edge_type type, trip const* trp,
-                              std::uint16_t encoded_capacity) {
-  return eg_edge{from, to, type, 0, encoded_capacity, trp};
+                              std::uint16_t const capacity) {
+  return eg_edge{from, to, type, 0, capacity, trp};
 }
 
 inline eg_edge make_no_route_edge(eg_event_node* from, eg_event_node* to,
                                   uint32_t transfer_time) {
-  return eg_edge{from, to, eg_edge_type::NO_ROUTE, transfer_time, 0, nullptr};
+  return eg_edge{from,
+                 to,
+                 eg_edge_type::NO_ROUTE,
+                 transfer_time,
+                 std::numeric_limits<std::uint16_t>::max(),
+                 nullptr};
 }
 
 void add_no_route_edge(eg_event_node* from, eg_event_node* to,
@@ -62,11 +71,34 @@ void add_interchange(eg_event_node* from, eg_event_node* to,
       add_edge(make_interchange_edge(from, to, transfer_time)));
 }
 
-std::vector<eg_edge*> add_trip(
-    schedule const& sched, time_expanded_graph& g, extern_trip const& et,
-    trip_capacity_map_t const& trip_capacity_map,
-    category_capacity_map_t const& category_capacity_map,
-    std::uint16_t const default_capacity) {
+std::uint16_t get_edge_capacity(eg_event_node const* from,
+                                eg_event_node const* to, extern_trip const& et,
+                                light_connection const& lc,
+                                paxmon_data const& data,
+                                schedule const& sched) {
+  if (data.graph_.trip_data_.find(et) != data.graph_.trip_data_.end()) {
+    auto td = data.graph_.trip_data_.find(et)->second.get();
+    auto edge_it = std::find_if(std::begin(td->edges_), std::end(td->edges_),
+                                [&](motis::paxmon::edge const* e) {
+                                  return e->from_->time_ == from->time_ &&
+                                         e->from_->type_ == from->type_ &&
+                                         e->from_->station_ == from->station_ &&
+                                         e->to_->time_ == to->time_ &&
+                                         e->to_->type_ == to->type_ &&
+                                         e->to_->station_ == to->station_;
+                                });
+    assert(edge_it != std::end(td->edges_));
+    return ((*edge_it)->capacity() < (*edge_it)->passengers_)
+               ? 0
+               : (*edge_it)->capacity() - (*edge_it)->passengers_;
+  }
+  return get_capacity(sched, lc, data.trip_capacity_map_,
+                      data.category_capacity_map_, data.default_capacity_)
+      .first;
+}
+
+std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
+                               extern_trip const& et, paxmon_data const& data) {
   std::vector<eg_edge*> edges;
 
   auto trp = get_trip(sched, et);
@@ -91,31 +123,25 @@ std::vector<eg_edge*> add_trip(
                                           {},
                                           g.nodes_.size()}))
                         .get();
-    auto const encoded_capacity = encode_capacity(get_capacity(
-        sched, lc, trip_capacity_map, category_capacity_map, default_capacity));
-    edges.emplace_back(add_edge(make_trip_edge(
-        dep_node, arr_node, eg_edge_type::TRIP, trp, encoded_capacity)));
+    auto capacity = get_edge_capacity(dep_node, arr_node, et, lc, data, sched);
+    edges.emplace_back(add_edge(
+        make_trip_edge(dep_node, arr_node, eg_edge_type::TRIP, trp, capacity)));
     if (prev_node != nullptr) {
       add_edge(make_trip_edge(prev_node, dep_node, eg_edge_type::WAIT, trp,
-                              encoded_capacity));
+                              capacity));
     }
     prev_node = arr_node;
   }
   return edges;
 }
 
-eg_trip_data* get_or_add_trip(
-    schedule const& sched, time_expanded_graph& g, extern_trip const& et,
-    trip_capacity_map_t const& trip_capacity_map,
-    category_capacity_map_t const& category_capacity_map,
-    std::uint16_t const default_capacity) {
-  return utl::get_or_create(
-             g.trip_data_, et,
-             [&]() {
-               return std::make_unique<eg_trip_data>(eg_trip_data{
-                   add_trip(sched, g, et, trip_capacity_map,
-                            category_capacity_map, default_capacity)});
-             })
+eg_trip_data* get_or_add_trip(schedule const& sched, time_expanded_graph& g,
+                              extern_trip const& et, paxmon_data const& data) {
+  return utl::get_or_create(g.trip_data_, et,
+                            [&]() {
+                              return std::make_unique<eg_trip_data>(
+                                  eg_trip_data{add_trip(sched, g, et, data)});
+                            })
       .get();
 }
 
@@ -193,15 +219,9 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
                                               schedule const& sched) {
   time_expanded_graph graph;
 
-  trip_capacity_map_t trip_capacity_map{data.trip_capacity_map_};
-  category_capacity_map_t category_capacity_map{data.category_capacity_map_};
-  std::uint16_t default_capacity{data.default_capacity_};
-
   for (auto const route_trips : sched.expanded_trips_) {
     for (trip const* rt : route_trips) {
-      get_or_add_trip(sched, graph, to_extern_trip(sched, rt),
-                      trip_capacity_map, category_capacity_map,
-                      default_capacity);
+      get_or_add_trip(sched, graph, to_extern_trip(sched, rt), data);
     }
   }
 

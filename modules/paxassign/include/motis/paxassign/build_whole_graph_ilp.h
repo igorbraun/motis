@@ -6,9 +6,14 @@
 
 namespace motis::paxassign {
 
-void build_whole_graph_ilp(
-    std::vector<std::pair<eg_event_node*, eg_event_node*>> const& from_to_nodes,
-    time_expanded_graph const& te_graph) {
+struct node_arc_psg_group {
+  eg_event_node* from_;
+  eg_event_node* to_;
+  int psg_count_;
+};
+
+void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
+                           time_expanded_graph const& te_graph) {
   // TODO: capacity awareness
   // TODO: how to penalize interchanges?
 
@@ -20,8 +25,8 @@ void build_whole_graph_ilp(
 
     // f.e. psg group k and f.e. edge (i,j) add variable x^k_(i,j)
     std::vector<std::map<eg_edge*, GRBVar>> commodities_edge_vars(
-        from_to_nodes.size());
-    for (auto i = 0u; i < from_to_nodes.size(); ++i) {
+        psg_groups.size());
+    for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
           switch (e->type_) {
@@ -40,7 +45,6 @@ void build_whole_graph_ilp(
                       "_" + std::to_string(e->to_->id_));
               break;
             }
-            // TODO
             case eg_edge_type::NO_ROUTE: {
               commodities_edge_vars[i][e.get()] = model.addVar(
                   0.0, 1.0, e->transfer_time_, GRB_BINARY,
@@ -54,7 +58,7 @@ void build_whole_graph_ilp(
     }
 
     // conservation constraints
-    for (auto i = 0u; i < from_to_nodes.size(); ++i) {
+    for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
         if (n->in_edges_.empty() && n->out_edges_.empty()) {
           continue;
@@ -67,10 +71,10 @@ void build_whole_graph_ilp(
           lhs -= commodities_edge_vars[i][ie];
         }
         double rhs = 0.0;
-        if (n.get() == from_to_nodes[i].first) {
+        if (n.get() == psg_groups[i].from_) {
           rhs = 1.0;
         }
-        if (n.get() == from_to_nodes[i].second) {
+        if (n.get() == psg_groups[i].to_) {
           rhs = -1.0;
         }
         model.addConstr(lhs, GRB_EQUAL, rhs);
@@ -78,7 +82,7 @@ void build_whole_graph_ilp(
     }
 
     // max 6 interchanges
-    for (auto i = 0u; i < from_to_nodes.size(); ++i) {
+    for (auto i = 0u; i < psg_groups.size(); ++i) {
       GRBLinExpr lhs = 0;
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
@@ -90,8 +94,21 @@ void build_whole_graph_ilp(
       model.addConstr(lhs, GRB_LESS_EQUAL, 6);
     }
 
+    // capacity awareness
+    for (auto const& n : te_graph.nodes_) {
+      for (auto const& e : n->out_edges_) {
+        GRBLinExpr lhs = 0;
+        for (auto i = 0u; i < psg_groups.size(); ++i) {
+          lhs += psg_groups[i].psg_count_* commodities_edge_vars[i][e.get()];
+        }
+        model.addConstr(lhs, GRB_LESS_EQUAL, e->capacity_);
+      }
+    }
+
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
     model.optimize();
+
+    // model.write("motis/build/rel/ilp_files/node_arc.sol");
 
   } catch (GRBException e) {
     std::cout << "Error code = " << e.getErrorCode() << std::endl;

@@ -27,18 +27,11 @@ inline std::ostream& operator<<(std::ostream& out, eg_edge_type const et) {
 }
 
 struct eg_edge {
-  inline std::uint64_t capacity() const {
-    return get_capacity(encoded_capacity_);
-  }
-  inline capacity_source capacity_source() const {
-    return get_capacity_source(encoded_capacity_);
-  }
-
   eg_event_node* from_{};
   eg_event_node* to_{};
   eg_edge_type type_{};
   uint32_t transfer_time_{};
-  std::uint16_t encoded_capacity_{};
+  std::uint16_t capacity_{};
   struct trip const* trip_{};
 };
 

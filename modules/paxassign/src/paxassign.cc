@@ -130,25 +130,44 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   whole_graph_ilp_assignment(combined_groups, data, sched);
 }
 
-void paxassign::cap_ilp_assignment(
-    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
-    paxmon_data& data, schedule const& sched) {
-
-  {
-    scoped_timer withdraw_pg_assignments{"withdraw pg assignments"};
-    for (auto const& same_dest_gr : combined_groups) {
-      for (auto const& cpg : same_dest_gr.second) {
-        for (auto const& g : cpg.groups_) {
-          for (auto& e : g->edges_) {
-            if (e->passengers_ < g->passengers_) {
-              throw std::runtime_error("edge psgs less than group psgs");
-            }
-            e->passengers_ -= g->passengers_;
+void remove_psgs_from_edges(
+    std::map<unsigned, std::vector<combined_passenger_group>>&
+        combined_groups) {
+  scoped_timer withdraw_pg_assignments{"withdraw pg assignments"};
+  for (auto const& same_dest_gr : combined_groups) {
+    for (auto const& cpg : same_dest_gr.second) {
+      for (auto const& g : cpg.groups_) {
+        for (auto& e : g->edges_) {
+          if (e->passengers_ < g->passengers_) {
+            throw std::runtime_error("edge psgs less than group psgs");
           }
+          e->passengers_ -= g->passengers_;
         }
       }
     }
   }
+}
+
+void add_psgs_to_edges(
+    std::map<unsigned, std::vector<combined_passenger_group>>&
+        combined_groups) {
+  scoped_timer pg_assignments{"assign psgs back to edges"};
+  for (auto const& same_dest_gr : combined_groups) {
+    for (auto const& cpg : same_dest_gr.second) {
+      for (auto const& g : cpg.groups_) {
+        for (auto& e : g->edges_) {
+          e->passengers_ += g->passengers_;
+        }
+      }
+    }
+  }
+}
+
+void paxassign::cap_ilp_assignment(
+    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+
+  remove_psgs_from_edges(combined_groups);
 
   auto routing_requests = 0ULL;
   auto alternatives_found = 0ULL;
@@ -371,18 +390,7 @@ void paxassign::cap_ilp_assignment(
              << std::endl;
   stats_file.close();
 
-  {
-    scoped_timer pg_assignments{"assign psgs back to edges"};
-    for (auto const& same_dest_gr : combined_groups) {
-      for (auto const& cpg : same_dest_gr.second) {
-        for (auto const& g : cpg.groups_) {
-          for (auto& e : g->edges_) {
-            e->passengers_ += g->passengers_;
-          }
-        }
-      }
-    }
-  }
+  add_psgs_to_edges(combined_groups);
 
   message_creator mc;
   std::vector<flatbuffers::Offset<ConnAssignment>> fbs_assignments;
@@ -416,6 +424,8 @@ void paxassign::whole_graph_ilp_assignment(
     paxmon_data& data, schedule const& sched) {
   auto te_graph = build_time_expanded_graph(data, sched);
 
+  remove_psgs_from_edges(combined_groups);
+
   {
     scoped_timer alt_timer{"find alternatives"};
     std::vector<ctx::future_ptr<ctx_data, void>> futures;
@@ -447,7 +457,7 @@ void paxassign::whole_graph_ilp_assignment(
                 });
 
   duration cummulative_duration = 0.0;
-  std::vector<std::pair<eg_event_node*, eg_event_node*>> from_to_nodes;
+  std::vector<node_arc_psg_group> node_arc_psg_groups;
 
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
@@ -499,13 +509,14 @@ void paxassign::whole_graph_ilp_assignment(
             }
           }
           cummulative_duration += min_dur;
-          from_to_nodes.emplace_back(at_ev_node, target_node);
+          node_arc_psg_groups.push_back(
+              {at_ev_node, target_node, cpg.passengers_});
         }
       }
     }
   }
 
-  build_whole_graph_ilp(from_to_nodes, te_graph);
+  build_whole_graph_ilp(node_arc_psg_groups, te_graph);
   std::cout << "################ Expected cumulative cost: "
             << cummulative_duration << std::endl;
 
@@ -518,6 +529,8 @@ void paxassign::whole_graph_ilp_assignment(
             << std::endl;
 
   throw std::runtime_error("time expanded graph is built");
+
+  add_psgs_to_edges(combined_groups);
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
