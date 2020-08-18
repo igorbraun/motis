@@ -9,7 +9,8 @@ namespace motis::paxassign {
 void build_whole_graph_ilp(
     std::vector<std::pair<eg_event_node*, eg_event_node*>> const& from_to_nodes,
     time_expanded_graph const& te_graph) {
-  // TODO: count used interchange edges
+  // TODO: capacity awareness
+  // TODO: how to penalize interchanges?
 
   try {
     GRBEnv env = GRBEnv(true);
@@ -74,6 +75,19 @@ void build_whole_graph_ilp(
         }
         model.addConstr(lhs, GRB_EQUAL, rhs);
       }
+    }
+
+    // max 6 interchanges
+    for (auto i = 0u; i < from_to_nodes.size(); ++i) {
+      GRBLinExpr lhs = 0;
+      for (auto const& n : te_graph.nodes_) {
+        for (auto const& e : n->out_edges_) {
+          if (e->type_ == eg_edge_type::INTERCHANGE) {
+            lhs += commodities_edge_vars[i][e.get()];
+          }
+        }
+      }
+      model.addConstr(lhs, GRB_LESS_EQUAL, 6);
     }
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
