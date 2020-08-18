@@ -22,7 +22,7 @@ inline eg_edge* add_edge(eg_edge const& e) {
 }
 
 inline eg_edge make_interchange_edge(eg_event_node* from, eg_event_node* to,
-                                     duration transfer_time) {
+                                     uint32_t transfer_time) {
   return eg_edge{from,          to, eg_edge_type::INTERCHANGE,
                  transfer_time, 0,  nullptr};
 }
@@ -33,12 +33,28 @@ inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
   return eg_edge{from, to, type, 0, encoded_capacity, trp};
 }
 
+inline eg_edge make_no_route_edge(eg_event_node* from, eg_event_node* to,
+                                  uint32_t transfer_time) {
+  return eg_edge{from, to, eg_edge_type::NO_ROUTE, transfer_time, 0, nullptr};
+}
+
+void add_no_route_edge(eg_event_node* from, eg_event_node* to,
+                       uint32_t transfer_time, time_expanded_graph& g) {
+  for (auto& e : from->out_edges_) {
+    if (e->type_ == eg_edge_type::NO_ROUTE && e->to_ == to &&
+        e->transfer_time_ == transfer_time) {
+      return;
+    }
+  }
+  g.no_route_edges_.emplace_back(
+      add_edge(make_no_route_edge(from, to, transfer_time)));
+}
+
 void add_interchange(eg_event_node* from, eg_event_node* to,
-                     duration transfer_time, time_expanded_graph& g) {
+                     uint32_t transfer_time, time_expanded_graph& g) {
   for (auto& e : from->out_edges_) {
     if (e->type_ == eg_edge_type::INTERCHANGE && e->to_ == to &&
         e->transfer_time_ == transfer_time) {
-      std::cout << "already there" << std::endl;
       return;
     }
   }
@@ -168,7 +184,7 @@ void build_interchange_edges(
   auto from_n = find_event_node(from_l_conn, motis::event_type::ARR, g, sched);
   for (auto const c : to_l_conns) {
     auto to_n = find_event_node(c, motis::event_type::DEP, g, sched);
-    duration const inch_duration = to_n->time_ - from_n->time_;
+    uint32_t const inch_duration = to_n->time_ - from_n->time_;
     add_interchange(from_n, to_n, inch_duration, g);
   }
 }

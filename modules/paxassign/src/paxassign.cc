@@ -416,6 +416,22 @@ void paxassign::whole_graph_ilp_assignment(
     paxmon_data& data, schedule const& sched) {
   auto te_graph = build_time_expanded_graph(data, sched);
 
+  {
+    scoped_timer alt_timer{"find alternatives"};
+    std::vector<ctx::future_ptr<ctx_data, void>> futures;
+    for (auto& cgs : combined_groups) {
+      auto const destination_station_id = cgs.first;
+      for (auto& cpg : cgs.second) {
+        futures.emplace_back(
+            spawn_job_void([&sched, destination_station_id, &cpg] {
+              cpg.alternatives_ = find_alternatives(
+                  sched, destination_station_id, cpg.localization_);
+            }));
+      }
+    }
+    ctx::await_all(futures);
+  }
+
   std::for_each(te_graph.nodes_.begin(), te_graph.nodes_.end(),
                 [](std::unique_ptr<eg_event_node>& n) {
                   for (auto const e : n->in_edges_) {
@@ -429,6 +445,9 @@ void paxassign::whole_graph_ilp_assignment(
                     }
                   }
                 });
+
+  duration cummulative_duration = 0.0;
+  std::vector<std::pair<eg_event_node*, eg_event_node*>> from_to_nodes;
 
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
@@ -470,11 +489,25 @@ void paxassign::whole_graph_ilp_assignment(
             }
           }
 
-          build_whole_graph_ilp(at_ev_node, target_node, te_graph);
+          motis::paxassign::add_no_route_edge(at_ev_node, target_node, 100000,
+                                              te_graph);
+
+          uint32_t min_dur = std::numeric_limits<uint32_t>::max();
+          for (auto const& a : cpg.alternatives_) {
+            if (a.duration_ < min_dur) {
+              min_dur = a.duration_;
+            }
+          }
+          cummulative_duration += min_dur;
+          from_to_nodes.emplace_back(at_ev_node, target_node);
         }
       }
     }
   }
+
+  build_whole_graph_ilp(from_to_nodes, te_graph);
+  std::cout << "################ Expected cumulative cost: "
+            << cummulative_duration << std::endl;
 
   std::cout << "Edges after interchanges to dummies: " << std::endl;
   std::cout << std::accumulate(te_graph.nodes_.begin(), te_graph.nodes_.end(),
