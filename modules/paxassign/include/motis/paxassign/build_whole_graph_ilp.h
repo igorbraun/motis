@@ -7,7 +7,7 @@
 namespace motis::paxassign {
 
 struct config {
-  uint32_t interchange_penalty_{0};
+  uint32_t interchange_penalty_{0};  // typical value at DB: 30 min
   uint16_t max_allowed_interchanges_{6};
 };
 
