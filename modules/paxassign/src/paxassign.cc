@@ -450,13 +450,12 @@ void paxassign::whole_graph_ilp_assignment(
                                 << " to " << e->to_->type_ << ", from time "
                                 << e->from_->time_ << " to time "
                                 << e->to_->time_
-                                << ", transfer time: " << e->transfer_time_
-                                << std::endl;
+                                << ", transfer time: " << e->cost_ << std::endl;
                     }
                   }
                 });
 
-  duration cummulative_duration = 0.0;
+  duration cumulative_duration = 0.0;
   std::vector<node_arc_psg_group> node_arc_psg_groups;
 
   for (auto& cgs : combined_groups) {
@@ -508,7 +507,7 @@ void paxassign::whole_graph_ilp_assignment(
               min_dur = a.duration_;
             }
           }
-          cummulative_duration += min_dur;
+          cumulative_duration += min_dur;
           node_arc_psg_groups.push_back(
               {at_ev_node, target_node, cpg.passengers_});
         }
@@ -516,9 +515,11 @@ void paxassign::whole_graph_ilp_assignment(
     }
   }
 
-  build_whole_graph_ilp(node_arc_psg_groups, te_graph);
+  // TODO: check which edges are selected & create meaningful return struct
+  config config;
+  build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
   std::cout << "################ Expected cumulative cost: "
-            << cummulative_duration << std::endl;
+            << cumulative_duration << std::endl;
 
   std::cout << "Edges after interchanges to dummies: " << std::endl;
   std::cout << std::accumulate(te_graph.nodes_.begin(), te_graph.nodes_.end(),
