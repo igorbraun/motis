@@ -34,36 +34,37 @@ inline eg_edge make_interchange_edge(eg_event_node* from, eg_event_node* to,
 inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
                               eg_edge_type type, trip const* trp,
                               std::uint16_t const capacity) {
-  return eg_edge{from, to, type, 0, capacity, trp};
+  return eg_edge{from,     to,
+                 type,     static_cast<uint32_t>(to->time_ - from->time_),
+                 capacity, trp};
 }
 
 inline eg_edge make_no_route_edge(eg_event_node* from, eg_event_node* to,
-                                  uint32_t transfer_time) {
+                                  uint32_t cost) {
   return eg_edge{from,
                  to,
                  eg_edge_type::NO_ROUTE,
-                 transfer_time,
+                 cost,
                  std::numeric_limits<std::uint16_t>::max(),
                  nullptr};
 }
 
-void add_no_route_edge(eg_event_node* from, eg_event_node* to,
-                       uint32_t transfer_time, time_expanded_graph& g) {
+void add_no_route_edge(eg_event_node* from, eg_event_node* to, uint32_t cost,
+                       time_expanded_graph& g) {
   for (auto& e : from->out_edges_) {
     if (e->type_ == eg_edge_type::NO_ROUTE && e->to_ == to &&
-        e->transfer_time_ == transfer_time) {
+        e->cost_ == cost) {
       return;
     }
   }
-  g.no_route_edges_.emplace_back(
-      add_edge(make_no_route_edge(from, to, transfer_time)));
+  g.no_route_edges_.emplace_back(add_edge(make_no_route_edge(from, to, cost)));
 }
 
 void add_interchange(eg_event_node* from, eg_event_node* to,
                      uint32_t transfer_time, time_expanded_graph& g) {
   for (auto& e : from->out_edges_) {
     if (e->type_ == eg_edge_type::INTERCHANGE && e->to_ == to &&
-        e->transfer_time_ == transfer_time) {
+        e->cost_ == transfer_time) {
       return;
     }
   }
