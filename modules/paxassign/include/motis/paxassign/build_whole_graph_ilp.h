@@ -6,6 +6,11 @@
 
 namespace motis::paxassign {
 
+struct config {
+  uint32_t interchange_penalty_{0};
+  uint16_t max_allowed_interchanges_{6};
+};
+
 struct node_arc_psg_group {
   eg_event_node* from_;
   eg_event_node* to_;
@@ -13,7 +18,8 @@ struct node_arc_psg_group {
 };
 
 void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
-                           time_expanded_graph const& te_graph) {
+                           time_expanded_graph const& te_graph,
+                           config const& config) {
   try {
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
@@ -26,8 +32,11 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
     for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
+          auto penalty = (e.get()->type_ == eg_edge_type::INTERCHANGE)
+                             ? config.interchange_penalty_
+                             : 0;
           commodities_edge_vars[i][e.get()] = model.addVar(
-              0.0, 1.0, e->cost_, GRB_BINARY,
+              0.0, 1.0, e->cost_ + penalty, GRB_BINARY,
               std::to_string(i) + "_" + eg_edge_type_to_string(e.get()) + "_" +
                   std::to_string(e->from_->id_) + "_" +
                   std::to_string(e->to_->id_));
@@ -69,7 +78,7 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
           }
         }
       }
-      model.addConstr(lhs, GRB_LESS_EQUAL, 6);
+      model.addConstr(lhs, GRB_LESS_EQUAL, config.max_allowed_interchanges_);
     }
 
     // capacity awareness
