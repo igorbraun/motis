@@ -30,10 +30,21 @@ struct eg_edge {
   eg_event_node* from_{};
   eg_event_node* to_{};
   eg_edge_type type_{};
-  uint32_t transfer_time_{};
+  uint32_t cost_{0};
   std::uint16_t capacity_{};
   struct trip const* trip_{};
 };
+
+
+inline std::string eg_edge_type_to_string(eg_edge const* e) {
+  switch (e->type_) {
+    case eg_edge_type::TRIP: return "TRIP";
+    case eg_edge_type::INTERCHANGE: return "INTERCHANGE";
+    case eg_edge_type::WAIT: return "WAIT";
+    case eg_edge_type::NO_ROUTE: return "NO_ROUTE";
+  }
+  return "";
+}
 
 struct eg_trip_data {
   std::vector<eg_edge*> edges_;

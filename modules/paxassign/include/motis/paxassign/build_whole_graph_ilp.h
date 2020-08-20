@@ -14,9 +14,6 @@ struct node_arc_psg_group {
 
 void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
                            time_expanded_graph const& te_graph) {
-  // TODO: capacity awareness
-  // TODO: how to penalize interchanges?
-
   try {
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
@@ -29,30 +26,11 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
     for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
-          switch (e->type_) {
-            case motis::paxassign::eg_edge_type::TRIP:
-            case motis::paxassign::eg_edge_type::WAIT: {
-              commodities_edge_vars[i][e.get()] = model.addVar(
-                  0.0, 1.0, e->to_->time_ - e->from_->time_, GRB_BINARY,
-                  std::to_string(i) + "_TW_" + std::to_string(e->from_->id_) +
-                      "_" + std::to_string(e->to_->id_));
-              break;
-            }
-            case eg_edge_type::INTERCHANGE: {
-              commodities_edge_vars[i][e.get()] = model.addVar(
-                  0.0, 1.0, e->transfer_time_, GRB_BINARY,
-                  std::to_string(i) + "_I_" + std::to_string(e->from_->id_) +
-                      "_" + std::to_string(e->to_->id_));
-              break;
-            }
-            case eg_edge_type::NO_ROUTE: {
-              commodities_edge_vars[i][e.get()] = model.addVar(
-                  0.0, 1.0, e->transfer_time_, GRB_BINARY,
-                  std::to_string(i) + "_NR_" + std::to_string(e->from_->id_) +
-                      "_" + std::to_string(e->to_->id_));
-              break;
-            }
-          }
+          commodities_edge_vars[i][e.get()] = model.addVar(
+              0.0, 1.0, e->cost_, GRB_BINARY,
+              std::to_string(i) + "_" + eg_edge_type_to_string(e.get()) + "_" +
+                  std::to_string(e->from_->id_) + "_" +
+                  std::to_string(e->to_->id_));
         }
       }
     }
@@ -99,7 +77,7 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
       for (auto const& e : n->out_edges_) {
         GRBLinExpr lhs = 0;
         for (auto i = 0u; i < psg_groups.size(); ++i) {
-          lhs += psg_groups[i].psg_count_* commodities_edge_vars[i][e.get()];
+          lhs += psg_groups[i].psg_count_ * commodities_edge_vars[i][e.get()];
         }
         model.addConstr(lhs, GRB_LESS_EQUAL, e->capacity_);
       }
