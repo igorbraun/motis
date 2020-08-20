@@ -482,7 +482,7 @@ void paxassign::whole_graph_ilp_assignment(
           auto target_node = te_graph.nodes_
                                  .emplace_back(std::make_unique<eg_event_node>(
                                      eg_event_node{INVALID_TIME,
-                                                   event_type::ARR,
+                                                   eg_event_type::ARR,
                                                    cpg.destination_station_id_,
                                                    {},
                                                    {},
@@ -492,7 +492,7 @@ void paxassign::whole_graph_ilp_assignment(
           for (auto& n : te_graph.nodes_) {
             if (n.get() != target_node &&
                 n->station_ == cpg.destination_station_id_ &&
-                n->type_ == event_type::ARR) {
+                n->type_ == eg_event_type::ARR) {
               motis::paxassign::add_interchange(n.get(), target_node, 0,
                                                 te_graph);
             }

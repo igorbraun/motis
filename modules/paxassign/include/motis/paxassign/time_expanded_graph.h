@@ -5,9 +5,20 @@ namespace motis::paxassign {
 struct eg_edge;
 struct time_expanded_graph;
 
+enum class eg_event_type : uint8_t { DEP, ARR, WAIT };
+
+inline std::ostream& operator<<(std::ostream& o, eg_event_type const t) {
+  switch (t) {
+    case eg_event_type::ARR: return o << "ARR";
+    case eg_event_type::DEP: return o << "DEP";
+    case eg_event_type::WAIT: return o << "WAIT";
+  }
+  return o;
+}
+
 struct eg_event_node {
   time time_{INVALID_TIME};
-  event_type type_{event_type::ARR};
+  eg_event_type type_{eg_event_type::ARR};
   std::uint32_t station_{0};
   std::vector<std::unique_ptr<eg_edge>> out_edges_;
   std::vector<eg_edge*> in_edges_;
@@ -35,7 +46,6 @@ struct eg_edge {
   struct trip const* trip_{};
 };
 
-
 inline std::string eg_edge_type_to_string(eg_edge const* e) {
   switch (e->type_) {
     case eg_edge_type::TRIP: return "TRIP";
@@ -55,6 +65,7 @@ struct time_expanded_graph {
   mcd::hash_map<extern_trip, std::unique_ptr<eg_trip_data>> trip_data_;
   std::vector<eg_edge*> interchange_edges_;
   std::vector<eg_edge*> no_route_edges_;
+  std::vector<eg_edge*> not_trip_edges_;
 };
 
 }  // namespace motis::paxassign
