@@ -442,19 +442,6 @@ void paxassign::whole_graph_ilp_assignment(
     ctx::await_all(futures);
   }
 
-  std::for_each(te_graph.nodes_.begin(), te_graph.nodes_.end(),
-                [](std::unique_ptr<eg_event_node>& n) {
-                  for (auto const e : n->in_edges_) {
-                    if (e->type_ == eg_edge_type::INTERCHANGE) {
-                      std::cout << "inch edge from " << e->from_->type_
-                                << " to " << e->to_->type_ << ", from time "
-                                << e->from_->time_ << " to time "
-                                << e->to_->time_
-                                << ", transfer time: " << e->cost_ << std::endl;
-                    }
-                  }
-                });
-
   duration cumulative_duration = 0.0;
   std::vector<node_arc_psg_group> node_arc_psg_groups;
 
@@ -493,13 +480,14 @@ void paxassign::whole_graph_ilp_assignment(
             if (n.get() != target_node &&
                 n->station_ == cpg.destination_station_id_ &&
                 n->type_ == eg_event_type::ARR) {
-              motis::paxassign::add_interchange(n.get(), target_node, 0,
-                                                te_graph);
+              motis::paxassign::add_not_in_trip_edge(
+                  n.get(), target_node, eg_edge_type::INTERCHANGE, 0, te_graph);
             }
           }
 
-          motis::paxassign::add_no_route_edge(at_ev_node, target_node, 100000,
-                                              te_graph);
+          motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
+                                                 eg_edge_type::NO_ROUTE, 100000,
+                                                 te_graph);
 
           uint32_t min_dur = std::numeric_limits<uint32_t>::max();
           for (auto const& a : cpg.alternatives_) {
@@ -520,15 +508,13 @@ void paxassign::whole_graph_ilp_assignment(
   build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
   std::cout << "################ Expected cumulative cost: "
             << cumulative_duration << std::endl;
-
-  std::cout << "Edges after interchanges to dummies: " << std::endl;
+  std::cout << "All edges: " << std::endl;
   std::cout << std::accumulate(te_graph.nodes_.begin(), te_graph.nodes_.end(),
                                0.0,
                                [](double sum, auto& n) {
                                  return sum + n->in_edges_.size();
                                })
             << std::endl;
-
   throw std::runtime_error("time expanded graph is built");
 
   add_psgs_to_edges(combined_groups);
