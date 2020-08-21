@@ -25,6 +25,7 @@
 #include "motis/paxassign/build_cap_ILP.h"
 #include "motis/paxassign/build_time_exp_graph.h"
 #include "motis/paxassign/build_whole_graph_ilp.h"
+#include "motis/paxassign/service_time_exp_graph.h"
 #include "motis/paxassign/time_expanded_graph.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
@@ -447,59 +448,42 @@ void paxassign::whole_graph_ilp_assignment(
 
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
-      // TODO: handle also passengers, which are not in trip yet
-      if (cpg.localization_.in_trip()) {
-        eg_event_node* at_ev_node = nullptr;
-        auto tr_data = te_graph.trip_data_.find(
-            to_extern_trip(sched, cpg.localization_.in_trip_));
-        if (tr_data != te_graph.trip_data_.end()) {
-        }
-        auto at_edge = std::find_if(
-            std::begin(tr_data->second->edges_),
-            std::end(tr_data->second->edges_), [&cpg](eg_edge* e_ptr) {
-              return e_ptr->to_->station_ ==
-                         cpg.localization_.at_station_->index_ &&
-                     cpg.localization_.arrival_time_ == e_ptr->to_->time_;
-            });
-        if (at_edge != tr_data->second->edges_.end()) {
-          at_ev_node = (*at_edge)->to_;
-        }
-
-        if (at_ev_node != nullptr) {
-          auto target_node = te_graph.nodes_
-                                 .emplace_back(std::make_unique<eg_event_node>(
-                                     eg_event_node{INVALID_TIME,
-                                                   eg_event_type::ARR,
-                                                   cpg.destination_station_id_,
-                                                   {},
-                                                   {},
-                                                   te_graph.nodes_.size()}))
-                                 .get();
-
-          for (auto& n : te_graph.nodes_) {
-            if (n.get() != target_node &&
-                n->station_ == cpg.destination_station_id_ &&
-                n->type_ == eg_event_type::ARR) {
-              motis::paxassign::add_not_in_trip_edge(
-                  n.get(), target_node, eg_edge_type::INTERCHANGE, 0, te_graph);
-            }
-          }
-
-          motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
-                                                 eg_edge_type::NO_ROUTE, 100000,
-                                                 te_graph);
-
-          uint32_t min_dur = std::numeric_limits<uint32_t>::max();
-          for (auto const& a : cpg.alternatives_) {
-            if (a.duration_ < min_dur) {
-              min_dur = a.duration_;
-            }
-          }
-          cumulative_duration += min_dur;
-          node_arc_psg_groups.push_back(
-              {at_ev_node, target_node, cpg.passengers_});
+      eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
+      if (at_ev_node == nullptr) {
+        std::cout << "NO OPTION FOR PASSENGER TO LEAVE FROM STATION"
+                  << std::endl;
+        continue;
+      }
+      auto target_node = te_graph.nodes_
+                             .emplace_back(std::make_unique<eg_event_node>(
+                                 eg_event_node{INVALID_TIME,
+                                               eg_event_type::ARR,
+                                               cpg.destination_station_id_,
+                                               {},
+                                               {},
+                                               te_graph.nodes_.size()}))
+                             .get();
+      for (auto& n : te_graph.nodes_) {
+        if (n.get() != target_node &&
+            n->station_ == cpg.destination_station_id_ &&
+            n->type_ == eg_event_type::ARR) {
+          motis::paxassign::add_not_in_trip_edge(
+              n.get(), target_node, eg_edge_type::WAIT, 0, te_graph);
         }
       }
+      motis::paxassign::add_not_in_trip_edge(
+          at_ev_node, target_node, eg_edge_type::NO_ROUTE, 100000, te_graph);
+      node_arc_psg_groups.push_back({at_ev_node, target_node, cpg.passengers_});
+
+      // Just verification, to delete
+      uint32_t min_dur =
+          std::min_element(std::begin(cpg.alternatives_),
+                           std::end(cpg.alternatives_),
+                           [](alternative const& lhs, alternative const& rhs) {
+                             return lhs.duration_ < rhs.duration_;
+                           })
+              ->duration_;
+      cumulative_duration += min_dur;
     }
   }
 

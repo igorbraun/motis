@@ -15,6 +15,7 @@
 #include "motis/module/context/get_schedule.h"
 
 #include "motis/paxassign/time_expanded_graph.h"
+#include "motis/paxassign/service_time_exp_graph.h"
 
 namespace motis::paxassign {
 
@@ -49,38 +50,6 @@ void add_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
   }
   g.not_trip_edges_.emplace_back(
       add_edge(make_not_in_trip_edge(from, to, et, transfer_time)));
-}
-
-bool event_types_comp(event_type const& et, eg_event_type const& eg_et) {
-  return ((et == event_type::ARR && eg_et == eg_event_type::ARR) ||
-          (et == event_type::DEP && eg_et == eg_event_type::DEP));
-}
-
-std::uint16_t get_edge_capacity(eg_event_node const* from,
-                                eg_event_node const* to, extern_trip const& et,
-                                light_connection const& lc,
-                                paxmon_data const& data,
-                                schedule const& sched) {
-  if (data.graph_.trip_data_.find(et) != data.graph_.trip_data_.end()) {
-    auto td = data.graph_.trip_data_.find(et)->second.get();
-    auto edge_it =
-        std::find_if(std::begin(td->edges_), std::end(td->edges_),
-                     [&](motis::paxmon::edge const* e) {
-                       return e->from_->time_ == from->time_ &&
-                              e->from_->station_ == from->station_ &&
-                              e->to_->time_ == to->time_ &&
-                              e->to_->station_ == to->station_ &&
-                              event_types_comp(e->from_->type_, from->type_) &&
-                              event_types_comp(e->to_->type_, to->type_);
-                     });
-    assert(edge_it != std::end(td->edges_));
-    return ((*edge_it)->capacity() < (*edge_it)->passengers_)
-               ? 0
-               : (*edge_it)->capacity() - (*edge_it)->passengers_;
-  }
-  return get_capacity(sched, lc, data.trip_capacity_map_,
-                      data.category_capacity_map_, data.default_capacity_)
-      .first;
 }
 
 std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
