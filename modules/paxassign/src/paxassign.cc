@@ -443,7 +443,6 @@ void paxassign::whole_graph_ilp_assignment(
     ctx::await_all(futures);
   }
 
-  duration cumulative_duration = 0.0;
   std::vector<node_arc_psg_group> node_arc_psg_groups;
 
   for (auto& cgs : combined_groups) {
@@ -473,32 +472,31 @@ void paxassign::whole_graph_ilp_assignment(
       }
       motis::paxassign::add_not_in_trip_edge(
           at_ev_node, target_node, eg_edge_type::NO_ROUTE, 100000, te_graph);
-      node_arc_psg_groups.push_back({at_ev_node, target_node, cpg.passengers_});
-
-      // Just verification, to delete
-      uint32_t min_dur =
-          std::min_element(std::begin(cpg.alternatives_),
-                           std::end(cpg.alternatives_),
-                           [](alternative const& lhs, alternative const& rhs) {
-                             return lhs.duration_ < rhs.duration_;
-                           })
-              ->duration_;
-      cumulative_duration += min_dur;
+      node_arc_psg_groups.push_back(
+          {cpg, at_ev_node, target_node, cpg.passengers_});
     }
   }
 
-  // TODO: check which edges are selected & create meaningful return struct
-  config config;
-  build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
-  std::cout << "################ Expected cumulative cost: "
-            << cumulative_duration << std::endl;
-  std::cout << "All edges: " << std::endl;
-  std::cout << std::accumulate(te_graph.nodes_.begin(), te_graph.nodes_.end(),
-                               0.0,
-                               [](double sum, auto& n) {
-                                 return sum + n->in_edges_.size();
-                               })
-            << std::endl;
+  config config{30, 6};
+  auto solution = build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
+
+  // TODO: do something with the solution:
+  for (auto i = 0u; i < solution.size(); ++i) {
+    std::cout << "Psg: " << i << " count: " << node_arc_psg_groups[i].psg_count_
+              << " edges : " << std::endl;
+    for (auto const& e : solution[i]) {
+      auto trp = (e->trip_ == nullptr)
+                     ? "-"
+                     : std::to_string(e->trip_->id_.primary_.train_nr_);
+      std::cout << "  train " << trp << " type " << e->type_ << " from "
+                << sched.stations_[e->from_->station_]->name_ << " to "
+                << sched.stations_[e->to_->station_]->name_ << " at "
+                << format_time(e->from_->time_) << " - "
+                << format_time(e->to_->time_) << " cost " << e->cost_
+                << std::endl;
+    }
+  }
+
   throw std::runtime_error("time expanded graph is built");
 
   add_psgs_to_edges(combined_groups);

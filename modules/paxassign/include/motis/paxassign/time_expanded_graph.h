@@ -25,14 +25,21 @@ struct eg_event_node {
   size_t id_;
 };
 
-enum class eg_edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT, NO_ROUTE };
+enum class eg_edge_type : std::uint8_t {
+  TRIP,
+  TRAIN_ENTRY,
+  TRAIN_EXIT,
+  WAIT,
+  NO_ROUTE
+};
 
 inline std::ostream& operator<<(std::ostream& out, eg_edge_type const et) {
   switch (et) {
     case eg_edge_type::TRIP: return out << "TRIP";
-    case eg_edge_type::INTERCHANGE: return out << "INTERCHANGE";
     case eg_edge_type::WAIT: return out << "WAIT";
     case eg_edge_type::NO_ROUTE: return out << "NO_ROUTE";
+    case eg_edge_type::TRAIN_ENTRY: return out << "TRAIN_ENTRY";
+    case eg_edge_type::TRAIN_EXIT: return out << "TRAIN_EXIT";
   }
   return out;
 }
@@ -49,9 +56,10 @@ struct eg_edge {
 inline std::string eg_edge_type_to_string(eg_edge const* e) {
   switch (e->type_) {
     case eg_edge_type::TRIP: return "TRIP";
-    case eg_edge_type::INTERCHANGE: return "INTERCHANGE";
     case eg_edge_type::WAIT: return "WAIT";
     case eg_edge_type::NO_ROUTE: return "NO_ROUTE";
+    case eg_edge_type::TRAIN_ENTRY: return "TRAIN_ENTRY";
+    case eg_edge_type::TRAIN_EXIT: return "TRAIN_EXIT";
   }
   return "";
 }

@@ -12,14 +12,15 @@ struct config {
 };
 
 struct node_arc_psg_group {
+  combined_passenger_group& cpg_;
   eg_event_node* from_;
   eg_event_node* to_;
   int psg_count_;
 };
 
-void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
-                           time_expanded_graph const& te_graph,
-                           config const& config) {
+std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
+    std::vector<node_arc_psg_group> const& psg_groups,
+    time_expanded_graph const& te_graph, config const& config) {
   try {
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
@@ -32,11 +33,12 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
     for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
-          auto penalty = (e.get()->type_ == eg_edge_type::INTERCHANGE)
+          auto penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
                              ? config.interchange_penalty_
                              : 0;
           commodities_edge_vars[i][e.get()] = model.addVar(
-              0.0, 1.0, e->cost_ + penalty, GRB_BINARY,
+              0.0, 1.0, psg_groups[i].psg_count_ * (e->cost_ + penalty),
+              GRB_BINARY,
               std::to_string(i) + "_" + eg_edge_type_to_string(e.get()) + "_" +
                   std::to_string(e->from_->id_) + "_" +
                   std::to_string(e->to_->id_));
@@ -73,7 +75,7 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
       GRBLinExpr lhs = 0;
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
-          if (e->type_ == eg_edge_type::INTERCHANGE) {
+          if (e->type_ == eg_edge_type::TRAIN_ENTRY) {
             lhs += commodities_edge_vars[i][e.get()];
           }
         }
@@ -95,7 +97,31 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
     model.optimize();
 
+    int status = model.get(GRB_IntAttr_Status);
+    if (status != GRB_OPTIMAL) {
+      throw std::runtime_error("node-arc-form ILP model: solution not optimal");
+    }
+
+    std::vector<std::vector<eg_edge*>> solution(psg_groups.size());
+    for (auto i = 0u; i < psg_groups.size(); ++i) {
+      for (auto const& n : te_graph.nodes_) {
+        for (auto const& e : n->out_edges_) {
+          if (commodities_edge_vars[i][e.get()].get(GRB_DoubleAttr_X) == 1.0) {
+            solution[i].push_back(e.get());
+          }
+        }
+      }
+      std::sort(std::begin(solution[i]), std::end(solution[i]),
+                [](eg_edge const* lhs, eg_edge const* rhs) {
+                  return ((lhs->to_->time_ < rhs->to_->time_) ||
+                          (lhs->to_->time_ == rhs->to_->time_ &&
+                           lhs->from_->time_ < rhs->from_->time_));
+                });
+    }
+
     // model.write("motis/build/rel/ilp_files/node_arc.sol");
+    // model.write("motis/build/rel/ilp_files/node_arc.lp");
+    return solution;
 
   } catch (GRBException e) {
     std::cout << "Error code = " << e.getErrorCode() << std::endl;
@@ -103,6 +129,7 @@ void build_whole_graph_ilp(std::vector<node_arc_psg_group> const& psg_groups,
   } catch (...) {
     std::cout << "Exception during optimization" << std::endl;
   }
+  return {};
 }
 
 }  // namespace motis::paxassign
