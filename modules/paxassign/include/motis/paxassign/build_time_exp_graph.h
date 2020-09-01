@@ -9,13 +9,14 @@
 #include "utl/pipes/transform.h"
 #include "utl/pipes/vec.h"
 
+#include "motis/core/common/logging.h"
 #include "motis/core/access/realtime_access.h"
 #include "motis/core/access/trip_iterator.h"
 #include "motis/core/conv/trip_conv.h"
 #include "motis/module/context/get_schedule.h"
 
-#include "motis/paxassign/time_expanded_graph.h"
 #include "motis/paxassign/service_time_exp_graph.h"
+#include "motis/paxassign/time_expanded_graph.h"
 
 namespace motis::paxassign {
 
@@ -69,6 +70,7 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
                                           {},
                                           g.nodes_.size()}))
                         .get();
+    g.st_to_nodes_[dep_node->station_].push_back(dep_node);
     auto arr_node = g.nodes_
                         .emplace_back(std::make_unique<eg_event_node>(
                             eg_event_node{lc.a_time_,
@@ -78,6 +80,7 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
                                           {},
                                           g.nodes_.size()}))
                         .get();
+    g.st_to_nodes_[arr_node->station_].push_back(arr_node);
     auto capacity = get_edge_capacity(dep_node, arr_node, et, lc, data, sched);
     edges.emplace_back(add_edge(
         make_trip_edge(dep_node, arr_node, eg_edge_type::TRIP, trp, capacity)));
@@ -126,6 +129,7 @@ std::vector<eg_event_node*> create_wait_nodes(
                                            {},
                                            graph.nodes_.size()}))
                          .get();
+    graph.st_to_nodes_[wait_node->station_].push_back(wait_node);
     for (auto& n : ttn.second) {
       (n->type_ == eg_event_type::DEP)
           ? graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
@@ -162,24 +166,28 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
                                               schedule const& sched) {
   time_expanded_graph graph;
 
-  for (auto const route_trips : sched.expanded_trips_) {
-    for (trip const* rt : route_trips) {
-      get_or_add_trip(sched, graph, to_extern_trip(sched, rt), data);
+  {
+    logging::scoped_timer alt_timer{"add trips to te-graph"};
+    for (auto const route_trips : sched.expanded_trips_) {
+      for (trip const* rt : route_trips) {
+        get_or_add_trip(sched, graph, to_extern_trip(sched, rt), data);
+      }
     }
   }
-
-  for (auto const& sn : sched.station_nodes_) {
-    std::vector<eg_event_node*> relevant_nodes =
-        utl::all(graph.nodes_) |
-        utl::remove_if([&](auto const& n) { return n->station_ != sn->id_; }) |
-        utl::transform([&](auto const& n) { return n.get(); }) | utl::vec();
-
-    if (!relevant_nodes.empty()) {
-      build_transfers(relevant_nodes, sched.stations_[sn->id_]->transfer_time_,
-                      graph);
+  
+  {
+    logging::scoped_timer alt_timer{"add transfers to te-graph"};
+    auto station_count = sched.station_nodes_.size();
+    int i = 0;
+    for (auto const& sn : sched.station_nodes_) {
+      std::cout << "process sn " << i++ << " from " << station_count
+                << std::endl;
+      if (!graph.st_to_nodes_[sn->id_].empty()) {
+        build_transfers(graph.st_to_nodes_[sn->id_],
+                        sched.stations_[sn->id_]->transfer_time_, graph);
+      }
     }
   }
-
   return graph;
 }
 

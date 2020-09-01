@@ -70,6 +70,7 @@ struct eg_trip_data {
 
 struct time_expanded_graph {
   std::vector<std::unique_ptr<eg_event_node>> nodes_;
+  std::map<uint32_t, std::vector<eg_event_node*>> st_to_nodes_;
   mcd::hash_map<extern_trip, std::unique_ptr<eg_trip_data>> trip_data_;
   std::vector<eg_edge*> not_trip_edges_;
 };
