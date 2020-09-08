@@ -174,14 +174,16 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
       }
     }
   }
-  
+
   {
     logging::scoped_timer alt_timer{"add transfers to te-graph"};
     auto station_count = sched.station_nodes_.size();
     int i = 0;
     for (auto const& sn : sched.station_nodes_) {
-      std::cout << "process sn " << i++ << " from " << station_count
-                << std::endl;
+      if (i % 1000 == 0) {
+        std::cout << "process sn " << i++ << " from " << station_count
+                  << std::endl;
+      }
       if (!graph.st_to_nodes_[sn->id_].empty()) {
         build_transfers(graph.st_to_nodes_[sn->id_],
                         sched.stations_[sn->id_]->transfer_time_, graph);
