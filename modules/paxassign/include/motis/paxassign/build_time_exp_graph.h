@@ -184,6 +184,7 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
         std::cout << "process sn " << i++ << " from " << station_count
                   << std::endl;
       }
+      i++;
       if (!graph.st_to_nodes_[sn->id_].empty()) {
         build_transfers(graph.st_to_nodes_[sn->id_],
                         sched.stations_[sn->id_]->transfer_time_, graph);
