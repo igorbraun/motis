@@ -36,6 +36,30 @@ std::uint16_t get_edge_capacity(eg_event_node const* from,
       .first;
 }
 
+double get_edge_capacity_utilization(eg_event_node const* from,
+                                     eg_event_node const* to,
+                                     extern_trip const& et,
+                                     light_connection const& lc,
+                                     paxmon_data const& data,
+                                     schedule const& sched) {
+  if (data.graph_.trip_data_.find(et) != data.graph_.trip_data_.end()) {
+    auto td = data.graph_.trip_data_.find(et)->second.get();
+    auto edge_it =
+        std::find_if(std::begin(td->edges_), std::end(td->edges_),
+                     [&](motis::paxmon::edge const* e) {
+                       return e->from_->time_ == from->time_ &&
+                              e->from_->station_ == from->station_ &&
+                              e->to_->time_ == to->time_ &&
+                              e->to_->station_ == to->station_ &&
+                              event_types_comp(e->from_->type_, from->type_) &&
+                              event_types_comp(e->to_->type_, to->type_);
+                     });
+    assert(edge_it != std::end(td->edges_));
+    return (double)(*edge_it)->passengers_ / (*edge_it)->capacity();
+  }
+  return 0.0;
+}
+
 eg_event_node* get_localization_node(combined_passenger_group const& cpg,
                                      time_expanded_graph const& te_graph,
                                      schedule const& sched) {

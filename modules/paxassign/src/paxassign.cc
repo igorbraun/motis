@@ -428,6 +428,7 @@ void paxassign::whole_graph_ilp_assignment(
   remove_psgs_from_edges(combined_groups);
 
   {
+    // TODO: find just time-shortest route
     scoped_timer alt_timer{"find alternatives"};
     std::vector<ctx::future_ptr<ctx_data, void>> futures;
     for (auto& cgs : combined_groups) {
@@ -472,12 +473,15 @@ void paxassign::whole_graph_ilp_assignment(
       }
       motis::paxassign::add_not_in_trip_edge(
           at_ev_node, target_node, eg_edge_type::NO_ROUTE, 100000, te_graph);
-      node_arc_psg_groups.push_back(
-          {cpg, at_ev_node, target_node, cpg.passengers_});
+      node_arc_psg_groups.push_back({cpg, at_ev_node, target_node,
+                                     cpg.passengers_,
+                                     std::unordered_set<eg_edge*>()});
     }
   }
 
   config config{30, 6};
+  // TODO: in the next function, before adding graph to ILP we have to reduce
+  // graph
   auto solution = build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
 
   // TODO: do something with the solution:

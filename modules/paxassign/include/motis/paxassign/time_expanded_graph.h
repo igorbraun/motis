@@ -50,6 +50,8 @@ struct eg_edge {
   eg_edge_type type_{};
   uint32_t cost_{0};
   std::uint16_t capacity_{};
+  double capacity_utilization_{};
+  service_class service_class_{};
   struct trip const* trip_{};
 };
 

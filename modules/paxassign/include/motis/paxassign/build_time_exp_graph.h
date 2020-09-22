@@ -29,16 +29,25 @@ inline eg_edge* add_edge(eg_edge const& e) {
 
 inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
                               eg_edge_type type, trip const* trp,
-                              std::uint16_t const capacity) {
+                              std::uint16_t const capacity,
+                              double const capacity_utilization,
+                              service_class const sc) {
   return eg_edge{from,     to,
                  type,     static_cast<uint32_t>(to->time_ - from->time_),
-                 capacity, trp};
+                 capacity, capacity_utilization,
+                 sc,       trp};
 }
 
 inline eg_edge make_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
                                      eg_edge_type et, uint32_t cost) {
-  return eg_edge{
-      from, to, et, cost, std::numeric_limits<std::uint16_t>::max(), nullptr};
+  return eg_edge{from,
+                 to,
+                 et,
+                 cost,
+                 std::numeric_limits<std::uint16_t>::max(),
+                 0.0,
+                 service_class::OTHER,
+                 nullptr};
 }
 
 void add_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
@@ -82,11 +91,15 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
                         .get();
     g.st_to_nodes_[arr_node->station_].push_back(arr_node);
     auto capacity = get_edge_capacity(dep_node, arr_node, et, lc, data, sched);
+    auto capacity_utilization =
+        get_edge_capacity_utilization(dep_node, arr_node, et, lc, data, sched);
     edges.emplace_back(add_edge(
-        make_trip_edge(dep_node, arr_node, eg_edge_type::TRIP, trp, capacity)));
+        make_trip_edge(dep_node, arr_node, eg_edge_type::TRIP, trp, capacity,
+                       capacity_utilization, lc.full_con_->clasz_)));
     if (prev_node != nullptr) {
       add_edge(make_trip_edge(prev_node, dep_node, eg_edge_type::WAIT, trp,
-                              capacity));
+                              capacity, capacity_utilization,
+                              lc.full_con_->clasz_));
     }
     prev_node = arr_node;
   }
