@@ -20,13 +20,15 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
     // f.e. psg group k and f.e. edge (i,j) add variable x^k_(i,j)
     std::vector<std::map<eg_edge*, GRBVar>> commodities_edge_vars(
         psg_groups.size());
+    std::vector<std::vector<bool>> nodes_validity(psg_groups.size());
 
     {
       logging::scoped_timer reduce_graph_timer{
           "reduce te graph for passengers"};
       config_graph_reduction reduction_config;
       for (auto i = 0u; i < psg_groups.size(); ++i) {
-        reduce_te_graph(psg_groups[i], te_graph, reduction_config);
+        nodes_validity[i] =
+            reduce_te_graph(psg_groups[i], te_graph, reduction_config);
       }
     }
 
@@ -34,7 +36,9 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
       logging::scoped_timer var_timer{"ILP: add commodity - variables"};
       for (auto i = 0u; i < psg_groups.size(); ++i) {
         for (auto const& n : te_graph.nodes_) {
+          if (!nodes_validity[i][n->id_]) continue;
           for (auto const& e : n->out_edges_) {
+            if (!nodes_validity[i][e->to_->id_]) continue;
             auto penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
                                ? config.interchange_penalty_
                                : 0;
@@ -59,11 +63,22 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
             continue;
           }
           GRBLinExpr lhs = 0;
+          bool lhs_valid = false;
           for (auto const& oe : n->out_edges_) {
+            if (commodities_edge_vars[i].find(oe.get()) ==
+                commodities_edge_vars[i].end()) {
+              continue;
+            }
             lhs += commodities_edge_vars[i][oe.get()];
+            lhs_valid = true;
           }
           for (auto const& ie : n->in_edges_) {
+            if (commodities_edge_vars[i].find(ie) ==
+                commodities_edge_vars[i].end()) {
+              continue;
+            }
             lhs -= commodities_edge_vars[i][ie];
+            lhs_valid = true;
           }
           double rhs = 0.0;
           if (n.get() == psg_groups[i].from_) {
@@ -72,7 +87,9 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
           if (n.get() == psg_groups[i].to_) {
             rhs = -1.0;
           }
-          model.addConstr(lhs, GRB_EQUAL, rhs);
+          if (lhs_valid) {
+            model.addConstr(lhs, GRB_EQUAL, rhs);
+          }
         }
       }
     }
@@ -83,7 +100,9 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
       for (auto i = 0u; i < psg_groups.size(); ++i) {
         GRBLinExpr lhs = 0;
         for (auto const& n : te_graph.nodes_) {
+          if (!nodes_validity[i][n->id_]) continue;
           for (auto const& e : n->out_edges_) {
+            if (!nodes_validity[i][e->to_->id_]) continue;
             if (e->type_ == eg_edge_type::TRAIN_ENTRY) {
               lhs += commodities_edge_vars[i][e.get()];
             }
@@ -99,10 +118,18 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
           GRBLinExpr lhs = 0;
+          bool lhs_valid = false;
           for (auto i = 0u; i < psg_groups.size(); ++i) {
+            if (commodities_edge_vars[i].find(e.get()) ==
+                commodities_edge_vars[i].end()) {
+              continue;
+            }
             lhs += psg_groups[i].psg_count_ * commodities_edge_vars[i][e.get()];
+            lhs_valid = true;
           }
-          model.addConstr(lhs, GRB_LESS_EQUAL, e->capacity_);
+          if (lhs_valid) {
+            model.addConstr(lhs, GRB_LESS_EQUAL, e->capacity_);
+          }
         }
       }
     }
@@ -119,6 +146,10 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
     for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
         for (auto const& e : n->out_edges_) {
+          if (commodities_edge_vars[i].find(e.get()) ==
+              commodities_edge_vars[i].end()) {
+            continue;
+          }
           if (commodities_edge_vars[i][e.get()].get(GRB_DoubleAttr_X) == 1.0) {
             solution[i].push_back(e.get());
           }
