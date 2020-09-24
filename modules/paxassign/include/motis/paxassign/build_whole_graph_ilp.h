@@ -24,8 +24,9 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
     {
       logging::scoped_timer reduce_graph_timer{
           "reduce te graph for passengers"};
+      config_graph_reduction reduction_config;
       for (auto i = 0u; i < psg_groups.size(); ++i) {
-        reduce_te_graph(psg_groups[i], te_graph);
+        reduce_te_graph(psg_groups[i], te_graph, reduction_config);
       }
     }
 

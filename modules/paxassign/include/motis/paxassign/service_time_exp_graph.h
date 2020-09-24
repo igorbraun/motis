@@ -39,9 +39,7 @@ std::uint16_t get_edge_capacity(eg_event_node const* from,
 double get_edge_capacity_utilization(eg_event_node const* from,
                                      eg_event_node const* to,
                                      extern_trip const& et,
-                                     light_connection const& lc,
-                                     paxmon_data const& data,
-                                     schedule const& sched) {
+                                     paxmon_data const& data) {
   if (data.graph_.trip_data_.find(et) != data.graph_.trip_data_.end()) {
     auto td = data.graph_.trip_data_.find(et)->second.get();
     auto edge_it =

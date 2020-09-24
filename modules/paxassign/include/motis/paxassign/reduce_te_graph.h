@@ -2,9 +2,9 @@
 
 #include "motis/paxassign/node_arc_structs.h"
 
-namespace motis::paxassign {
+#include <queue>
 
-struct node_arc_psg_group;
+namespace motis::paxassign {
 
 struct node_arc_node_info {
   eg_event_node* corresponding_ev_node_;
@@ -16,60 +16,93 @@ struct node_arc_node_info {
   std::vector<service_class> classes_history_;
 };
 
-void explore_te_graph(eg_event_node* start_node,
-                      time_expanded_graph const& te_graph) {
+struct config_graph_reduction {
+  uint16_t max_interchanges_{2};
+  time_t latest_arr_time_{module::get_schedule().schedule_end_};
+  double max_cap_utilization_{1.0};
+};
 
-  std::map<eg_event_node*, node_arc_node_info> nodes_info;
-  std::stack<node_arc_node_info*> stack;
+template <typename T>
+void print_queue(T& q) {
+  while (!q.empty()) {
+    std::cout << q.top().second << " ";
+    q.pop();
+  }
+  std::cout << '\n';
+}
 
-  nodes_info[start_node] =
-      node_arc_node_info{start_node, false, true, 0, start_node->time_, 0, {}};
-  stack.push(&nodes_info[start_node]);
-
-  while (!stack.empty()) {
-    auto curr_node = stack.top();
-    stack.pop();
-
-    // step 1: check whether valid or already visited
-    if (curr_node->visited_ || !curr_node->valid_) continue;
-    curr_node->visited_ = true;
-
-    // step 2: add all adjacent nodes to stack
-    for (auto const& oe : curr_node->corresponding_ev_node_->out_edges_) {
-      if (nodes_info.find(oe->to_) != nodes_info.end()) {
-        continue;
-      }
-      uint16_t updated_interchanges = (oe->type_ == eg_edge_type::TRAIN_ENTRY)
-                                          ? curr_node->interchanges_until_ + 1
-                                          : curr_node->interchanges_until_;
-      double updated_cap_util =
-          curr_node->max_cap_utilization_ > oe->capacity_utilization_
-              ? curr_node->max_cap_utilization_
-              : oe->capacity_utilization_;
-      std::vector<service_class> updated_classes_history(
-          curr_node->classes_history_);
-      if (oe->service_class_ != service_class::OTHER &&
-          (curr_node->classes_history_.empty() ||
-           oe->service_class_ != curr_node->classes_history_.back())) {
-        updated_classes_history.push_back(oe->service_class_);
-      }
-      nodes_info[oe->to_] = node_arc_node_info{oe->to_,
-                                               false,
-                                               true,
-                                               updated_interchanges,
-                                               oe->to_->time_,
-                                               updated_cap_util,
-                                               updated_classes_history};
-      stack.push(&nodes_info[oe->to_]);
+template <typename T>
+void filter_nodes(std::vector<bool>& nodes_validity, std::vector<T> const& dist,
+                  T const upper_bound) {
+  for (auto i = 0u; i < dist.size(); ++i) {
+    if (dist[i] > upper_bound) {
+      nodes_validity[i] = false;
     }
   }
 }
 
+template <typename T, typename F>
+std::vector<T> dijkstra(eg_event_node* start_node,
+                        time_expanded_graph const& te_graph, F calc_new_dist) {
+  typedef std::pair<eg_event_node*, T> node_weight;
+  auto cmp_min = [](node_weight left, node_weight right) {
+    return left.second > right.second;
+  };
+  std::priority_queue<node_weight, std::vector<node_weight>, decltype(cmp_min)>
+      pq(cmp_min);
+  std::vector<T> dist(te_graph.nodes_.size(), std::numeric_limits<T>::max());
+
+  pq.push(std::make_pair(start_node, 0));
+  dist[start_node->id_] = 0;
+
+  while (!pq.empty()) {
+    auto curr_node = pq.top().first;
+    auto curr_dist = pq.top().second;
+    pq.pop();
+    for (auto const& oe : curr_node->out_edges_) {
+      if (oe->type_ == eg_edge_type::NO_ROUTE) continue;
+      auto new_dist = calc_new_dist(oe.get(), curr_dist);
+      if (new_dist < dist[oe->to_->id_]) {
+        dist[oe->to_->id_] = new_dist;
+        pq.push(std::make_pair(oe->to_, new_dist));
+      }
+    }
+  }
+  return dist;
+}
+
 void reduce_te_graph(node_arc_psg_group& psg_group,
-                     time_expanded_graph const& te_graph) {
-  explore_te_graph(psg_group.from_, te_graph);
-  std::cout << "TATATAA" << std::endl;
-  // TODO: return only edges, which go from a valid node to a valid node
+                     time_expanded_graph const& te_graph,
+                     config_graph_reduction const& config) {
+  std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
+  {
+    logging::scoped_timer interchanges_filter{"interchanges filter"};
+    auto calc_dist_interchanges = [](eg_edge* oe, auto curr_dist) {
+      return (oe->type_ == eg_edge_type::TRAIN_ENTRY) ? curr_dist + 1
+                                                      : curr_dist;
+    };
+    auto interchanges_filter_res =
+        dijkstra<uint16_t>(psg_group.from_, te_graph, calc_dist_interchanges);
+    filter_nodes<uint16_t>(nodes_validity, interchanges_filter_res,
+                           config.max_interchanges_);
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    std::cout << "result after inch_filter: " << valid_count << std::endl;
+  }
+  {
+    logging::scoped_timer cap_util_filter{"capacity utilization filter"};
+    auto calc_dist_cap_util = [](eg_edge* oe, double curr_dist) {
+      return std::max(oe->capacity_utilization_, curr_dist);
+    };
+    auto cap_util_filter_res =
+        dijkstra<double>(psg_group.from_, te_graph, calc_dist_cap_util);
+    filter_nodes<double>(nodes_validity, cap_util_filter_res,
+                         config.max_cap_utilization_);
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    std::cout << "result after cap util: " << valid_count << std::endl;
+  }
+
 }
 
 }  // namespace motis::paxassign

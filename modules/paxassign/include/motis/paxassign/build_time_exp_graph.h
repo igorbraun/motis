@@ -92,7 +92,7 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
     g.st_to_nodes_[arr_node->station_].push_back(arr_node);
     auto capacity = get_edge_capacity(dep_node, arr_node, et, lc, data, sched);
     auto capacity_utilization =
-        get_edge_capacity_utilization(dep_node, arr_node, et, lc, data, sched);
+        get_edge_capacity_utilization(dep_node, arr_node, et, data);
     edges.emplace_back(add_edge(
         make_trip_edge(dep_node, arr_node, eg_edge_type::TRIP, trp, capacity,
                        capacity_utilization, lc.full_con_->clasz_)));

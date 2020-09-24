@@ -480,8 +480,6 @@ void paxassign::whole_graph_ilp_assignment(
   }
 
   config config{30, 6};
-  // TODO: in the next function, before adding graph to ILP we have to reduce
-  // graph
   auto solution = build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
 
   // TODO: do something with the solution:
