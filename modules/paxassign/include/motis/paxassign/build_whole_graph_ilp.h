@@ -94,7 +94,7 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
       }
     }
 
-    // max 6 interchanges
+    // interchanges upper bound
     {
       logging::scoped_timer inch_cons_timer{"ILP: interchange constraints"};
       for (auto i = 0u; i < psg_groups.size(); ++i) {
