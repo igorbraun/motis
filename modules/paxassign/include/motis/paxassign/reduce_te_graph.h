@@ -118,41 +118,52 @@ std::vector<bool> reduce_te_graph(node_arc_psg_group& psg_group,
                                   config_graph_reduction const& config) {
   std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
 
-  /*
   // INTERCHANGE FILTER
   {
     logging::scoped_timer interchanges_filter{"interchanges filter"};
     auto calc_dist_interchanges = [](eg_edge* e, auto curr_dist) {
       return (e->type_ == eg_edge_type::TRAIN_ENTRY) ? curr_dist + 1
-                                                      : curr_dist;
+                                                     : curr_dist;
     };
-    auto interchanges_filter_res = dijkstra<uint16_t>(
-        psg_group.from_, 0, std::numeric_limits<uint16_t>::max(), te_graph,
-        nodes_validity, calc_dist_interchanges);
-    filter_nodes<uint16_t>(nodes_validity, interchanges_filter_res,
+    auto forward_inch_filter_res =
+        dijkstra<uint16_t>(dijkstra_type::FORWARD, psg_group.from_, 0,
+                           std::numeric_limits<uint16_t>::max(), te_graph,
+                           nodes_validity, calc_dist_interchanges);
+    filter_nodes<uint16_t>(nodes_validity, forward_inch_filter_res,
+                           config.max_interchanges_);
+    auto backward_inch_filter_res =
+        dijkstra<uint16_t>(dijkstra_type::BACKWARD, psg_group.to_, 0,
+                           std::numeric_limits<uint16_t>::max(), te_graph,
+                           nodes_validity, calc_dist_interchanges);
+    filter_nodes<uint16_t>(nodes_validity, backward_inch_filter_res,
                            config.max_interchanges_);
     auto valid_count =
         std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
     std::cout << "result after inch_filter: " << valid_count << " from "
               << te_graph.nodes_.size() << std::endl;
   }
-   */
-  /*
- // CAPACITY UTILIZATION FILTER
- {
-   logging::scoped_timer cap_util_filter{"capacity utilization filter"};
-   auto calc_dist_cap_util = [](eg_edge* e, double curr_dist) {
-     return std::max(e->capacity_utilization_, curr_dist);
-   };
-   auto cap_util_filter_res = dijkstra<double>(
-       psg_group.from_, te_graph, nodes_validity, calc_dist_cap_util);
-   filter_nodes<double>(nodes_validity, cap_util_filter_res,
-                        config.max_cap_utilization_);
-   auto valid_count =
-       std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
-   std::cout << "result after cap util: " << valid_count << " from "
-             << te_graph.nodes_.size() << std::endl;
- }*/
+
+  // CAPACITY UTILIZATION FILTER
+  {
+    logging::scoped_timer cap_util_filter{"capacity utilization filter"};
+    auto calc_dist_cap_util = [](eg_edge* e, double curr_dist) {
+      return std::max(e->capacity_utilization_, curr_dist);
+    };
+    auto forw_cap_util_filter_res =
+        dijkstra<double>(dijkstra_type::FORWARD, psg_group.from_, 0.0,
+                         std::numeric_limits<double>::max(), te_graph,
+                         nodes_validity, calc_dist_cap_util);
+    filter_nodes<double>(nodes_validity, forw_cap_util_filter_res,
+                         config.max_cap_utilization_);
+    auto backw_cap_util_filter_res =
+        dijkstra<double>(dijkstra_type::BACKWARD, psg_group.to_, 0.0,
+                         std::numeric_limits<double>::max(), te_graph,
+                         nodes_validity, calc_dist_cap_util);
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    std::cout << "result after cap util: " << valid_count << " from "
+              << te_graph.nodes_.size() << std::endl;
+  }
 
   // CLASSES FILTER, NEEDS RESULTS OF BOTH, FORWARD AND BACKWARD SEARCHES
   {
