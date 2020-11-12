@@ -480,7 +480,7 @@ void paxassign::whole_graph_ilp_assignment(
   }
 
   config config{30, 6};
-  auto solution = build_whole_graph_ilp(node_arc_psg_groups, te_graph, config);
+  auto solution = build_whole_graph_ilp(node_arc_psg_groups, te_graph, config, sched);
 
   // TODO: do something with the solution:
   for (auto i = 0u; i < solution.size(); ++i) {

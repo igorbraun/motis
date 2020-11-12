@@ -26,7 +26,7 @@ inline std::ostream& operator<<(std::ostream& out,
 
 struct config_graph_reduction {
   uint16_t max_interchanges_{2};
-  time_t latest_arr_time_{module::get_schedule().schedule_end_};
+  uint16_t allowed_delay_{300};
   double max_cap_utilization_{1.0};
   std::map<service_class, transport_category> class_to_cat_{
       {service_class::AIR, transport_category::LONG_DIST},
@@ -115,8 +115,23 @@ std::vector<T> dijkstra(dijkstra_type const& type, eg_event_node* start_node,
 
 std::vector<bool> reduce_te_graph(node_arc_psg_group& psg_group,
                                   time_expanded_graph const& te_graph,
-                                  config_graph_reduction const& config) {
+                                  config_graph_reduction const& config,
+                                  schedule const& sched) {
   std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
+
+  // TIME FILTER
+  auto latest_allowed_time = std::min<uint16_t>(
+      psg_group.cpg_.groups_[0]
+              ->compact_planned_journey_.legs_.back()
+              .exit_time_ +
+          config.allowed_delay_,
+      unix_to_motistime(sched, module::get_schedule().schedule_end_));
+  for (auto i = 0u; i < nodes_validity.size(); ++i) {
+    if (i == psg_group.to_->id_ || i == psg_group.from_->id_) continue;
+    if (te_graph.nodes_[i]->time_ > latest_allowed_time) {
+      nodes_validity[i] = false;
+    }
+  }
 
   // INTERCHANGE FILTER
   {

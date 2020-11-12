@@ -10,7 +10,8 @@ namespace motis::paxassign {
 
 std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
     std::vector<node_arc_psg_group>& psg_groups,
-    time_expanded_graph const& te_graph, config const& config) {
+    time_expanded_graph const& te_graph, config const& config,
+    schedule const& sched) {
   try {
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
@@ -28,7 +29,7 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
       config_graph_reduction reduction_config;
       for (auto i = 0u; i < psg_groups.size(); ++i) {
         nodes_validity[i] =
-            reduce_te_graph(psg_groups[i], te_graph, reduction_config);
+            reduce_te_graph(psg_groups[i], te_graph, reduction_config, sched);
       }
     }
 
