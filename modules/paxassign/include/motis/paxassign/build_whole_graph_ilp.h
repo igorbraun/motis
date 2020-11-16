@@ -1,6 +1,6 @@
 #pragma once
 
-#include "motis/paxassign/node_arc_structs.h"
+#include "motis/paxassign/algorithms_configs.h"
 #include "motis/paxassign/reduce_te_graph.h"
 #include "motis/paxassign/time_expanded_graph.h"
 
@@ -9,8 +9,8 @@
 namespace motis::paxassign {
 
 std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
-    std::vector<node_arc_psg_group>& psg_groups,
-    time_expanded_graph const& te_graph, config const& config,
+    std::vector<eg_psg_group>& psg_groups,
+    time_expanded_graph const& te_graph, node_arc_config const& config,
     schedule const& sched) {
   try {
     GRBEnv env = GRBEnv(true);

@@ -177,13 +177,12 @@ void build_transfers(std::vector<eg_event_node*> const& dep_arr_nodes,
 
 time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
                                               schedule const& sched) {
-  time_expanded_graph graph;
-
+  time_expanded_graph te_graph;
   {
     logging::scoped_timer alt_timer{"add trips to te-graph"};
     for (auto const route_trips : sched.expanded_trips_) {
       for (trip const* rt : route_trips) {
-        get_or_add_trip(sched, graph, to_extern_trip(sched, rt), data);
+        get_or_add_trip(sched, te_graph, to_extern_trip(sched, rt), data);
       }
     }
   }
@@ -198,13 +197,54 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
                   << std::endl;
       }
       i++;
-      if (!graph.st_to_nodes_[sn->id_].empty()) {
-        build_transfers(graph.st_to_nodes_[sn->id_],
-                        sched.stations_[sn->id_]->transfer_time_, graph);
+      if (!te_graph.st_to_nodes_[sn->id_].empty()) {
+        build_transfers(te_graph.st_to_nodes_[sn->id_],
+                        sched.stations_[sn->id_]->transfer_time_, te_graph);
       }
     }
   }
-  return graph;
+  return te_graph;
+}
+
+std::vector<eg_psg_group> add_psgs_to_te_graph(
+    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    schedule const& sched, node_arc_config const& config,
+    time_expanded_graph& te_graph) {
+  std::vector<eg_psg_group> eg_psg_groups;
+
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
+      if (at_ev_node == nullptr) {
+        std::cout << "NO OPTION FOR PASSENGER TO LEAVE FROM STATION"
+                  << std::endl;
+        continue;
+      }
+      auto target_node = te_graph.nodes_
+                             .emplace_back(std::make_unique<eg_event_node>(
+                                 eg_event_node{INVALID_TIME,
+                                               eg_event_type::ARR,
+                                               cpg.destination_station_id_,
+                                               {},
+                                               {},
+                                               te_graph.nodes_.size()}))
+                             .get();
+      for (auto& n : te_graph.nodes_) {
+        if (n.get() != target_node &&
+            n->station_ == cpg.destination_station_id_ &&
+            n->type_ == eg_event_type::ARR) {
+          motis::paxassign::add_not_in_trip_edge(
+              n.get(), target_node, eg_edge_type::WAIT, 0, te_graph);
+        }
+      }
+      motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
+                                             eg_edge_type::NO_ROUTE,
+                                             config.no_route_cost_, te_graph);
+      eg_psg_groups.push_back({cpg, at_ev_node, target_node, cpg.passengers_,
+                               std::unordered_set<eg_edge*>()});
+    }
+  }
+  return eg_psg_groups;
 }
 
 }  // namespace motis::paxassign

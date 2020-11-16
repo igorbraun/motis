@@ -1,6 +1,7 @@
 #pragma once
 
-#include "motis/paxassign/node_arc_structs.h"
+#include "motis/paxassign/dijkstra.h"
+#include "motis/paxassign/algorithms_configs.h"
 
 #include <queue>
 
@@ -63,57 +64,7 @@ void filter_nodes(std::vector<bool>& nodes_validity, std::vector<T> const& dist,
   }
 }
 
-enum class dijkstra_type { FORWARD = 0, BACKWARD = 1 };
-
-template <typename T, typename F>
-std::vector<T> dijkstra(dijkstra_type const& type, eg_event_node* start_node,
-                        T const start_node_init, T const dist_vec_init,
-                        time_expanded_graph const& te_graph,
-                        std::vector<bool> const& nodes_validity,
-                        F calc_new_dist) {
-  typedef std::pair<eg_event_node*, T> node_weight;
-  auto cmp_min = [](node_weight left, node_weight right) {
-    return left.second > right.second;
-  };
-  std::priority_queue<node_weight, std::vector<node_weight>, decltype(cmp_min)>
-      pq(cmp_min);
-  std::vector<T> dist(te_graph.nodes_.size(), dist_vec_init);
-
-  pq.push(std::make_pair(start_node, start_node_init));
-  dist[start_node->id_] = start_node_init;
-
-  while (!pq.empty()) {
-    auto curr_node = pq.top().first;
-    auto curr_dist = pq.top().second;
-    pq.pop();
-    if (type == dijkstra_type::FORWARD) {
-      for (auto const& oe : curr_node->out_edges_) {
-        if (!nodes_validity[oe->to_->id_]) {
-          continue;
-        }
-        auto new_dist = calc_new_dist(oe.get(), curr_dist);
-        if (new_dist < dist[oe->to_->id_]) {
-          dist[oe->to_->id_] = new_dist;
-          pq.push(std::make_pair(oe->to_, new_dist));
-        }
-      }
-    } else {
-      for (auto const& ie : curr_node->in_edges_) {
-        if (!nodes_validity[ie->from_->id_]) {
-          continue;
-        }
-        auto new_dist = calc_new_dist(ie, curr_dist);
-        if (new_dist < dist[ie->from_->id_]) {
-          dist[ie->from_->id_] = new_dist;
-          pq.push(std::make_pair(ie->from_, new_dist));
-        }
-      }
-    }
-  }
-  return dist;
-}
-
-std::vector<bool> reduce_te_graph(node_arc_psg_group& psg_group,
+std::vector<bool> reduce_te_graph(eg_psg_group& psg_group,
                                   time_expanded_graph const& te_graph,
                                   config_graph_reduction const& config,
                                   schedule const& sched) {

@@ -3,8 +3,10 @@
 #include <fstream>
 #include <iostream>
 
+#include "motis/paxassign/algorithms_configs.h"
 #include "motis/paxassign/build_cap_ILP.h"
 #include "motis/paxassign/capacitaty_aware_structs.h"
+
 #include "motis/paxmon/graph.h"
 
 namespace motis::paxassign {
@@ -62,7 +64,7 @@ void build_toy_scenario() {
                         30};  // should take c5, mixed cost-function
 
   std::vector<cap_ILP_psg_group> psg_groups{pg1, pg2, pg3, pg4};
-  cap_ILP_config config;
+  perceived_tt_config config;
   // build_ILP_from_scenario(psg_groups, config, "1");
   auto sol = build_ILP_from_scenario_API(psg_groups, config, "1");
   for (auto i = 0u; i < psg_groups.size(); ++i) {

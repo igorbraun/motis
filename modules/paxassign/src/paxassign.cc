@@ -22,9 +22,11 @@
 #include "motis/paxmon/loader/journeys/to_compact_journey.h"
 #include "motis/paxmon/messages.h"
 
+#include "motis/paxassign/algorithms_configs.h"
 #include "motis/paxassign/build_cap_ILP.h"
 #include "motis/paxassign/build_time_exp_graph.h"
 #include "motis/paxassign/build_whole_graph_ilp.h"
+#include "motis/paxassign/heuristic_algo/greedy.h"
 #include "motis/paxassign/service_time_exp_graph.h"
 #include "motis/paxassign/time_expanded_graph.h"
 
@@ -56,7 +58,6 @@ void paxassign::init(motis::module::registry& reg) {
   });
 
   reg.subscribe("/paxmon/monitoring_update", [&](msg_ptr const& msg) {
-    // whole_graph_ilp_assignment(msg);
     on_monitor(msg);
     return nullptr;
   });
@@ -128,7 +129,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   }
 
   // cap_ilp_assignment(combined_groups, data, sched);
-  whole_graph_ilp_assignment(combined_groups, data, sched);
+  // whole_graph_ilp_assignment(combined_groups, data, sched);
+  heuristic_assignments(combined_groups, data, sched);
 }
 
 void remove_psgs_from_edges(
@@ -268,7 +270,7 @@ void paxassign::cap_ilp_assignment(
   cap_ILP_edge no_route_edge{curr_e_id++, 100000, 100000, edge_type::NOROUTE};
 
   std::vector<cap_ILP_psg_group> cap_ILP_scenario;
-  cap_ILP_config ILP_config{};
+  perceived_tt_config ILP_config{};
   {
     scoped_timer alt_timer{"build data for capacitated model"};
     for (auto& cgs : combined_groups) {
@@ -423,68 +425,19 @@ void paxassign::cap_ilp_assignment(
 void paxassign::whole_graph_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
-  auto te_graph = build_time_expanded_graph(data, sched);
-
   remove_psgs_from_edges(combined_groups);
 
-  {
-    // TODO: find just time-shortest route
-    scoped_timer alt_timer{"find alternatives"};
-    std::vector<ctx::future_ptr<ctx_data, void>> futures;
-    for (auto& cgs : combined_groups) {
-      auto const destination_station_id = cgs.first;
-      for (auto& cpg : cgs.second) {
-        futures.emplace_back(
-            spawn_job_void([&sched, destination_station_id, &cpg] {
-              cpg.alternatives_ = find_alternatives(
-                  sched, destination_station_id, cpg.localization_);
-            }));
-      }
-    }
-    ctx::await_all(futures);
-  }
+  auto te_graph = build_time_expanded_graph(data, sched);
 
-  std::vector<node_arc_psg_group> node_arc_psg_groups;
+  node_arc_config config{30, 6, 100000};
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, config, te_graph);
 
-  for (auto& cgs : combined_groups) {
-    for (auto& cpg : cgs.second) {
-      eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
-      if (at_ev_node == nullptr) {
-        std::cout << "NO OPTION FOR PASSENGER TO LEAVE FROM STATION"
-                  << std::endl;
-        continue;
-      }
-      auto target_node = te_graph.nodes_
-                             .emplace_back(std::make_unique<eg_event_node>(
-                                 eg_event_node{INVALID_TIME,
-                                               eg_event_type::ARR,
-                                               cpg.destination_station_id_,
-                                               {},
-                                               {},
-                                               te_graph.nodes_.size()}))
-                             .get();
-      for (auto& n : te_graph.nodes_) {
-        if (n.get() != target_node &&
-            n->station_ == cpg.destination_station_id_ &&
-            n->type_ == eg_event_type::ARR) {
-          motis::paxassign::add_not_in_trip_edge(
-              n.get(), target_node, eg_edge_type::WAIT, 0, te_graph);
-        }
-      }
-      motis::paxassign::add_not_in_trip_edge(
-          at_ev_node, target_node, eg_edge_type::NO_ROUTE, 100000, te_graph);
-      node_arc_psg_groups.push_back({cpg, at_ev_node, target_node,
-                                     cpg.passengers_,
-                                     std::unordered_set<eg_edge*>()});
-    }
-  }
-
-  config config{30, 6};
-  auto solution = build_whole_graph_ilp(node_arc_psg_groups, te_graph, config, sched);
+  auto solution = build_whole_graph_ilp(eg_psg_groups, te_graph, config, sched);
 
   // TODO: do something with the solution:
   for (auto i = 0u; i < solution.size(); ++i) {
-    std::cout << "Psg: " << i << " count: " << node_arc_psg_groups[i].psg_count_
+    std::cout << "Psg: " << i << " count: " << eg_psg_groups[i].psg_count_
               << " edges : " << std::endl;
     for (auto const& e : solution[i]) {
       auto trp = (e->trip_ == nullptr)
@@ -500,6 +453,28 @@ void paxassign::whole_graph_ilp_assignment(
   }
 
   throw std::runtime_error("time expanded graph is built");
+
+  add_psgs_to_edges(combined_groups);
+}
+
+void paxassign::heuristic_assignments(
+    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+  remove_psgs_from_edges(combined_groups);
+
+  perceived_tt_config perc_tt_config;
+  node_arc_config eg_config{30, 6, 100000};
+
+  auto te_graph = build_time_expanded_graph(data, sched);
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
+
+  greedy_assignment(te_graph, eg_psg_groups, perc_tt_config);
+
+  throw std::runtime_error("time expanded graph is built");
+
+  // TODO: do experiments with reducing graph first on the higher level. maybe
+  // reducing graph helps for all the heuristic approaches
 
   add_psgs_to_edges(combined_groups);
 }

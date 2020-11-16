@@ -25,14 +25,6 @@ struct cap_ILP_psg_group {
   int psg_count_;
 };
 
-struct cap_ILP_config {
-  std::vector<double> cost_function_capacity_steps_{0.65, 1.0, 1.2};
-  std::vector<double> tt_and_waiting_penalties_{1.0, 1.2, 2.0};
-
-  double const transfer_penalty_ = 20;
-  uint32_t const no_route_cost_ = 100000;
-};
-
 struct cap_ILP_stats {
   unsigned long num_groups_;
   int no_alt_found_;

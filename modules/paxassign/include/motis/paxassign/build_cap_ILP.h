@@ -1,8 +1,9 @@
 #pragma once
 
-#include "motis/paxassign/capacitaty_aware_structs.h"
-
 #include <fstream>
+
+#include "motis/paxassign/algorithms_configs.h"
+#include "motis/paxassign/capacitaty_aware_structs.h"
 
 #include "utl/enumerate.h"
 
@@ -12,7 +13,7 @@ namespace motis::paxassign {
 
 cap_ILP_solution build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
-    cap_ILP_config const& config, std::string const&) {
+    perceived_tt_config const& config, std::string const&) {
   try {
     std::set<cap_ILP_edge const*> handled_edges;
     std::map<uint32_t, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
@@ -201,7 +202,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
 }
 
 void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
-                             cap_ILP_config const& config,
+                             perceived_tt_config const& config,
                              std::string const& scenario_id) {
   std::ofstream ilp_file("motis/build/rel/ilp_files/" + scenario_id + ".lp");
   // OBJECTIVE PART

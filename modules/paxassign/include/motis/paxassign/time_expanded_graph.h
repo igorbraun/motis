@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_set>
+
 namespace motis::paxassign {
 
 struct eg_edge;
@@ -68,6 +70,15 @@ inline std::string eg_edge_type_to_string(eg_edge const* e) {
 
 struct eg_trip_data {
   std::vector<eg_edge*> edges_;
+};
+
+struct eg_psg_group {
+  combined_passenger_group& cpg_;
+  eg_event_node* from_;
+  eg_event_node* to_;
+  int psg_count_;
+  // TODO: transfer edges validity to this struct?
+  std::unordered_set<eg_edge*> valid_edges_;
 };
 
 struct time_expanded_graph {
