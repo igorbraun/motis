@@ -78,7 +78,6 @@ std::vector<eg_edge*> sssd_dijkstra(eg_psg_group const& pg,
     auto curr_dist = pq.top().second;
     pq.pop();
     if (curr_node == pg.to_) {
-      final_cost = curr_dist;
       break;
     }
     for (auto const& oe : curr_node->out_edges_) {
