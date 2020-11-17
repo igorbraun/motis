@@ -11,6 +11,7 @@ struct perceived_tt_config {
 };
 
 struct node_arc_config {
+  double hard_capacity_ratio_{1.2};
   uint32_t interchange_penalty_{30};  // typical value at DB: 30 min
   uint16_t max_allowed_interchanges_{6};
   uint32_t const no_route_cost_{100000};

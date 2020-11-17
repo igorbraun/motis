@@ -128,7 +128,9 @@ std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
             lhs_valid = true;
           }
           if (lhs_valid) {
-            model.addConstr(lhs, GRB_LESS_EQUAL, e->free_capacity_);
+            model.addConstr(
+                lhs, GRB_LESS_EQUAL,
+                std::max(0, (e->soft_cap_boundary_ - e->passengers_)));
           }
         }
       }

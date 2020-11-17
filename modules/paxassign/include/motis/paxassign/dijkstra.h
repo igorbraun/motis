@@ -84,7 +84,7 @@ std::vector<eg_edge*> sssd_dijkstra(eg_psg_group const& pg,
       if (!nodes_validity[oe->to_->id_]) {
         continue;
       }
-      if (oe->free_capacity_ < pg.psg_count_) continue;
+      if ((oe->hard_cap_boundary_ - oe->passengers_) < pg.psg_count_) continue;
       auto new_dist = calc_new_dist(oe.get(), curr_dist);
       if (new_dist < dist[oe->to_->id_]) {
         dist[oe->to_->id_] = new_dist;

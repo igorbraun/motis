@@ -29,16 +29,18 @@ inline eg_edge* add_edge(eg_edge const& e) {
 
 inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
                               eg_edge_type type, trip const* trp,
-                              std::uint16_t const overall_capacity,
-                              std::uint16_t const free_capacity,
+                              std::uint16_t const soft_capacity,
+                              std::uint16_t const hard_capacity,
+                              std::uint16_t const edge_psgs,
                               double const capacity_utilization,
                               service_class const sc) {
   return eg_edge{from,
                  to,
                  type,
                  static_cast<uint32_t>(to->time_ - from->time_),
-                 overall_capacity,
-                 free_capacity,
+                 soft_capacity,
+                 hard_capacity,
+                 edge_psgs,
                  capacity_utilization,
                  sc,
                  trp};
@@ -52,6 +54,7 @@ inline eg_edge make_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
                  cost,
                  std::numeric_limits<std::uint16_t>::max(),
                  std::numeric_limits<std::uint16_t>::max(),
+                 0,
                  0.0,
                  service_class::OTHER,
                  nullptr};
@@ -69,8 +72,10 @@ void add_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
       add_edge(make_not_in_trip_edge(from, to, et, transfer_time)));
 }
 
-std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
-                               extern_trip const& et, paxmon_data const& data) {
+std::vector<eg_edge*> add_trip(schedule const& sched,
+                               node_arc_config const& config,
+                               time_expanded_graph& g, extern_trip const& et,
+                               paxmon_data const& data) {
   std::vector<eg_edge*> edges;
 
   auto trp = get_trip(sched, et);
@@ -97,18 +102,19 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
                                           g.nodes_.size()}))
                         .get();
     g.st_to_nodes_[arr_node->station_].push_back(arr_node);
-    auto free_capacity =
-        get_edge_free_capacity(dep_node, arr_node, et, lc, data, sched);
-    auto overall_capacity =
+    auto soft_capacity =
         get_edge_overall_capacity(dep_node, arr_node, et, lc, data, sched);
+    auto hard_capacity =
+        (std::uint16_t)config.hard_capacity_ratio_ * soft_capacity;
     auto capacity_utilization =
         get_edge_capacity_utilization(dep_node, arr_node, et, data);
+    auto edge_psgs = get_edge_psgs(dep_node, arr_node, et, data);
     edges.emplace_back(add_edge(make_trip_edge(
-        dep_node, arr_node, eg_edge_type::TRIP, trp, overall_capacity,
-        free_capacity, capacity_utilization, lc.full_con_->clasz_)));
+        dep_node, arr_node, eg_edge_type::TRIP, trp, soft_capacity,
+        hard_capacity, edge_psgs, capacity_utilization, lc.full_con_->clasz_)));
     if (prev_node != nullptr) {
       add_edge(make_trip_edge(prev_node, dep_node, eg_edge_type::WAIT, trp,
-                              overall_capacity, free_capacity,
+                              soft_capacity, hard_capacity, edge_psgs,
                               capacity_utilization, lc.full_con_->clasz_));
     }
     prev_node = arr_node;
@@ -116,13 +122,16 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
   return edges;
 }
 
-eg_trip_data* get_or_add_trip(schedule const& sched, time_expanded_graph& g,
-                              extern_trip const& et, paxmon_data const& data) {
-  return utl::get_or_create(g.trip_data_, et,
-                            [&]() {
-                              return std::make_unique<eg_trip_data>(
-                                  eg_trip_data{add_trip(sched, g, et, data)});
-                            })
+eg_trip_data* get_or_add_trip(schedule const& sched,
+                              node_arc_config const& config,
+                              time_expanded_graph& g, extern_trip const& et,
+                              paxmon_data const& data) {
+  return utl::get_or_create(
+             g.trip_data_, et,
+             [&]() {
+               return std::make_unique<eg_trip_data>(
+                   eg_trip_data{add_trip(sched, config, g, et, data)});
+             })
       .get();
 }
 
@@ -186,13 +195,15 @@ void build_transfers(std::vector<eg_event_node*> const& dep_arr_nodes,
 }
 
 time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
-                                              schedule const& sched) {
+                                              schedule const& sched,
+                                              node_arc_config const& config) {
   time_expanded_graph te_graph;
   {
     logging::scoped_timer alt_timer{"add trips to te-graph"};
     for (auto const route_trips : sched.expanded_trips_) {
       for (trip const* rt : route_trips) {
-        get_or_add_trip(sched, te_graph, to_extern_trip(sched, rt), data);
+        get_or_add_trip(sched, config, te_graph, to_extern_trip(sched, rt),
+                        data);
       }
     }
   }

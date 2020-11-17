@@ -427,9 +427,9 @@ void paxassign::whole_graph_ilp_assignment(
     paxmon_data& data, schedule const& sched) {
   remove_psgs_from_edges(combined_groups);
 
-  auto te_graph = build_time_expanded_graph(data, sched);
+  node_arc_config config{1.2, 30, 6, 100000};
+  auto te_graph = build_time_expanded_graph(data, sched, config);
 
-  node_arc_config config{30, 6, 100000};
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, config, te_graph);
 
@@ -462,9 +462,9 @@ void paxassign::heuristic_assignments(
   remove_psgs_from_edges(combined_groups);
 
   perceived_tt_config perc_tt_config;
-  node_arc_config eg_config{30, 6, 100000};
+  node_arc_config eg_config{1.2, 30, 6, 100000};
 
-  auto te_graph = build_time_expanded_graph(data, sched);
+  auto te_graph = build_time_expanded_graph(data, sched, eg_config);
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
 
@@ -495,6 +495,8 @@ void paxassign::heuristic_assignments(
                 << std::endl;
     }
   }
+
+  // TODO: another heuristic algorithms
 
   throw std::runtime_error("heuristic algorithms finished");
 
