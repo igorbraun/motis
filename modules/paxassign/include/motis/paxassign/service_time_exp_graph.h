@@ -9,11 +9,38 @@ bool event_types_comp(event_type const& et, eg_event_type const& eg_et) {
           (et == event_type::DEP && eg_et == eg_event_type::DEP));
 }
 
-std::uint16_t get_edge_capacity(eg_event_node const* from,
-                                eg_event_node const* to, extern_trip const& et,
-                                light_connection const& lc,
-                                paxmon_data const& data,
-                                schedule const& sched) {
+std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
+                                        eg_event_node const* to,
+                                        extern_trip const& et,
+                                        light_connection const& lc,
+                                        paxmon_data const& data,
+                                        schedule const& sched) {
+  if (data.graph_.trip_data_.find(et) != data.graph_.trip_data_.end()) {
+    auto td = data.graph_.trip_data_.find(et)->second.get();
+    auto edge_it =
+        std::find_if(std::begin(td->edges_), std::end(td->edges_),
+                     [&](motis::paxmon::edge const* e) {
+                       return e->from_->time_ == from->time_ &&
+                              e->from_->station_ == from->station_ &&
+                              e->to_->time_ == to->time_ &&
+                              e->to_->station_ == to->station_ &&
+                              event_types_comp(e->from_->type_, from->type_) &&
+                              event_types_comp(e->to_->type_, to->type_);
+                     });
+    assert(edge_it != std::end(td->edges_));
+    return (*edge_it)->capacity();
+  }
+  return get_capacity(sched, lc, data.trip_capacity_map_,
+                      data.category_capacity_map_, data.default_capacity_)
+      .first;
+}
+
+std::uint16_t get_edge_free_capacity(eg_event_node const* from,
+                                     eg_event_node const* to,
+                                     extern_trip const& et,
+                                     light_connection const& lc,
+                                     paxmon_data const& data,
+                                     schedule const& sched) {
   if (data.graph_.trip_data_.find(et) != data.graph_.trip_data_.end()) {
     auto td = data.graph_.trip_data_.find(et)->second.get();
     auto edge_it =
@@ -92,6 +119,32 @@ eg_event_node* get_localization_node(combined_passenger_group const& cpg,
                 return lhs->time_ < rhs->time_;
               });
     return relevant_nodes[0];
+  }
+}
+
+void add_psgs_to_edges(std::vector<eg_edge*> const& connection,
+                       eg_psg_group const& pg) {
+  for (auto const& e : connection) {
+    if (e->overall_capacity_ == std::numeric_limits<std::uint16_t>::max()) {
+      continue;
+    }
+    e->free_capacity_ = e->free_capacity_ - pg.psg_count_;
+    e->capacity_utilization_ =
+        (double)(e->overall_capacity_ - e->free_capacity_) /
+        e->overall_capacity_;
+  }
+}
+
+void remove_psgs_from_edges(std::vector<eg_edge*> const& connection,
+                            eg_psg_group const& pg) {
+  for (auto const& e : connection) {
+    if (e->overall_capacity_ == std::numeric_limits<std::uint16_t>::max()) {
+      continue;
+    }
+    e->free_capacity_ = e->free_capacity_ + pg.psg_count_;
+    e->capacity_utilization_ =
+        (double)(e->overall_capacity_ - e->free_capacity_) /
+        e->overall_capacity_;
   }
 }
 

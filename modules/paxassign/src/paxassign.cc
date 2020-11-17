@@ -435,7 +435,6 @@ void paxassign::whole_graph_ilp_assignment(
 
   auto solution = build_whole_graph_ilp(eg_psg_groups, te_graph, config, sched);
 
-  // TODO: do something with the solution:
   for (auto i = 0u; i < solution.size(); ++i) {
     std::cout << "Psg: " << i << " count: " << eg_psg_groups[i].psg_count_
               << " edges : " << std::endl;
@@ -469,12 +468,35 @@ void paxassign::heuristic_assignments(
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
 
-  greedy_assignment(te_graph, eg_psg_groups, perc_tt_config);
+  config_graph_reduction reduction_config;
+  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    nodes_validity[i] =
+        reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+  }
 
-  throw std::runtime_error("time expanded graph is built");
+  auto rng = std::mt19937{};
 
-  // TODO: do experiments with reducing graph first on the higher level. maybe
-  // reducing graph helps for all the heuristic approaches
+  auto greedy_solution = greedy_assignment(te_graph, nodes_validity,
+                                           eg_psg_groups, perc_tt_config, rng);
+
+  for (auto i = 0u; i < greedy_solution.size(); ++i) {
+    std::cout << "Psg: " << i << " count: " << eg_psg_groups[i].psg_count_
+              << " edges : " << std::endl;
+    for (auto const& e : greedy_solution[i]) {
+      auto trp = (e->trip_ == nullptr)
+                     ? "-"
+                     : std::to_string(e->trip_->id_.primary_.train_nr_);
+      std::cout << "  train " << trp << " type " << e->type_ << " from "
+                << sched.stations_[e->from_->station_]->name_ << " to "
+                << sched.stations_[e->to_->station_]->name_ << " at "
+                << format_time(e->from_->time_) << " - "
+                << format_time(e->to_->time_) << " cost " << e->cost_
+                << std::endl;
+    }
+  }
+
+  throw std::runtime_error("heuristic algorithms finished");
 
   add_psgs_to_edges(combined_groups);
 }

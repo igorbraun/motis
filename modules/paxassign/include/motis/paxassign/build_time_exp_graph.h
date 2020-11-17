@@ -29,13 +29,19 @@ inline eg_edge* add_edge(eg_edge const& e) {
 
 inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
                               eg_edge_type type, trip const* trp,
-                              std::uint16_t const capacity,
+                              std::uint16_t const overall_capacity,
+                              std::uint16_t const free_capacity,
                               double const capacity_utilization,
                               service_class const sc) {
-  return eg_edge{from,     to,
-                 type,     static_cast<uint32_t>(to->time_ - from->time_),
-                 capacity, capacity_utilization,
-                 sc,       trp};
+  return eg_edge{from,
+                 to,
+                 type,
+                 static_cast<uint32_t>(to->time_ - from->time_),
+                 overall_capacity,
+                 free_capacity,
+                 capacity_utilization,
+                 sc,
+                 trp};
 }
 
 inline eg_edge make_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
@@ -44,6 +50,7 @@ inline eg_edge make_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
                  to,
                  et,
                  cost,
+                 std::numeric_limits<std::uint16_t>::max(),
                  std::numeric_limits<std::uint16_t>::max(),
                  0.0,
                  service_class::OTHER,
@@ -90,16 +97,19 @@ std::vector<eg_edge*> add_trip(schedule const& sched, time_expanded_graph& g,
                                           g.nodes_.size()}))
                         .get();
     g.st_to_nodes_[arr_node->station_].push_back(arr_node);
-    auto capacity = get_edge_capacity(dep_node, arr_node, et, lc, data, sched);
+    auto free_capacity =
+        get_edge_free_capacity(dep_node, arr_node, et, lc, data, sched);
+    auto overall_capacity =
+        get_edge_overall_capacity(dep_node, arr_node, et, lc, data, sched);
     auto capacity_utilization =
         get_edge_capacity_utilization(dep_node, arr_node, et, data);
-    edges.emplace_back(add_edge(
-        make_trip_edge(dep_node, arr_node, eg_edge_type::TRIP, trp, capacity,
-                       capacity_utilization, lc.full_con_->clasz_)));
+    edges.emplace_back(add_edge(make_trip_edge(
+        dep_node, arr_node, eg_edge_type::TRIP, trp, overall_capacity,
+        free_capacity, capacity_utilization, lc.full_con_->clasz_)));
     if (prev_node != nullptr) {
       add_edge(make_trip_edge(prev_node, dep_node, eg_edge_type::WAIT, trp,
-                              capacity, capacity_utilization,
-                              lc.full_con_->clasz_));
+                              overall_capacity, free_capacity,
+                              capacity_utilization, lc.full_con_->clasz_));
     }
     prev_node = arr_node;
   }
