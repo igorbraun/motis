@@ -164,4 +164,11 @@ void remove_psgs_from_edges(std::vector<eg_edge*> const& connection,
   }
 }
 
+void reassign_psgs(std::vector<eg_edge*> const& from_route,
+                   std::vector<eg_edge*> const& to_route,
+                   eg_psg_group const& pg) {
+  remove_psgs_from_edges(from_route, pg);
+  add_psgs_to_edges(to_route, pg);
+}
+
 }  // namespace motis::paxassign

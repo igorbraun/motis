@@ -55,7 +55,8 @@ std::vector<T> dijkstra(dijkstra_type const& type, eg_event_node* start_node,
 }
 
 template <typename T, typename F>
-std::vector<eg_edge*> sssd_dijkstra(eg_psg_group const& pg,
+std::vector<eg_edge*> sssd_dijkstra(eg_event_node* from, eg_event_node* to,
+                                    int const psg_count,
                                     T const start_node_init,
                                     T const dist_vec_init,
                                     time_expanded_graph const& te_graph,
@@ -71,13 +72,13 @@ std::vector<eg_edge*> sssd_dijkstra(eg_psg_group const& pg,
       pq(cmp_min);
   std::vector<T> dist(te_graph.nodes_.size(), dist_vec_init);
 
-  pq.push(std::make_tuple(pg.from_, start_node_init, 0));
-  dist[pg.from_->id_] = start_node_init;
+  pq.push(std::make_tuple(from, start_node_init, 0));
+  dist[from->id_] = start_node_init;
 
   while (!pq.empty()) {
     auto [curr_node, curr_dist, curr_interchanges] = pq.top();
     pq.pop();
-    if (curr_node == pg.to_) {
+    if (curr_node == to) {
       break;
     }
     for (auto const& oe : curr_node->out_edges_) {
@@ -85,7 +86,7 @@ std::vector<eg_edge*> sssd_dijkstra(eg_psg_group const& pg,
       if (!nodes_validity[oe->to_->id_]) {
         continue;
       }
-      if ((oe->hard_cap_boundary_ - oe->passengers_) < pg.psg_count_) continue;
+      if ((oe->hard_cap_boundary_ - oe->passengers_) < psg_count) continue;
       auto new_dist = calc_new_dist(oe.get(), curr_dist);
       if (new_dist < dist[oe->to_->id_]) {
         dist[oe->to_->id_] = new_dist;
@@ -98,8 +99,11 @@ std::vector<eg_edge*> sssd_dijkstra(eg_psg_group const& pg,
     }
   }
   std::vector<eg_edge*> solution;
-  eg_event_node* curr_node = pg.to_;
-  while (curr_node != pg.from_) {
+  if (node_to_incoming_e.find(to) == node_to_incoming_e.end()) {
+    return solution;
+  }
+  eg_event_node* curr_node = to;
+  while (curr_node != from) {
     solution.insert(solution.begin(), node_to_incoming_e[curr_node]);
     curr_node = node_to_incoming_e[curr_node]->from_;
   }

@@ -27,6 +27,10 @@
 #include "motis/paxassign/build_time_exp_graph.h"
 #include "motis/paxassign/build_whole_graph_ilp.h"
 #include "motis/paxassign/heuristic_algo/greedy.h"
+#include "motis/paxassign/heuristic_algo/local_search.h"
+#include "motis/paxassign/perceived_tt.h"
+#include "motis/paxassign/print_solution.h"
+#include "motis/paxassign/service_functions.h"
 #include "motis/paxassign/service_time_exp_graph.h"
 #include "motis/paxassign/time_expanded_graph.h"
 
@@ -462,12 +466,15 @@ void paxassign::heuristic_assignments(
   remove_psgs_from_edges(combined_groups);
 
   perceived_tt_config perc_tt_config;
-  node_arc_config eg_config{1.2, 30, 6, 100000};
+  node_arc_config eg_config{1.2, 30, 6, 10000};
 
   auto te_graph = build_time_expanded_graph(data, sched, eg_config);
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
 
+  // TODO: for subset-scenario (only long dist stations) nodes validity has the
+  // size of 3,53 mb. If during evaluation it will be to big, remove nodes
+  // validity at all and do all the stuff without it
   config_graph_reduction reduction_config;
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
@@ -475,28 +482,62 @@ void paxassign::heuristic_assignments(
         reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
 
+  // perceived tt for start solution
+  auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
+    if (e->capacity_utilization_ >
+        perc_tt_config.cost_function_capacity_steps_.back()) {
+      return (double)perc_tt_config.no_route_cost_ + curr_dist;
+    }
+    double transfer_penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
+                                  ? perc_tt_config.transfer_penalty_
+                                  : 0.0;
+    auto const it =
+        std::lower_bound(perc_tt_config.cost_function_capacity_steps_.begin(),
+                         perc_tt_config.cost_function_capacity_steps_.end(),
+                         e->capacity_utilization_);
+    auto idx =
+        std::distance(perc_tt_config.cost_function_capacity_steps_.begin(), it);
+    return perc_tt_config.tt_and_waiting_penalties_[idx] * e->cost_ +
+           transfer_penalty + curr_dist;
+  };
+
+  // shortest tt as in the Halle-paper
+  auto calc_tt_dist = [&](eg_edge* e, double curr_dist) {
+    if (e->capacity_utilization_ >
+        perc_tt_config.cost_function_capacity_steps_.back()) {
+      return (double)perc_tt_config.no_route_cost_ + curr_dist;
+    }
+    return e->cost_ + curr_dist;
+  };
+
   auto rng = std::mt19937{};
 
-  auto greedy_solution = greedy_assignment(te_graph, nodes_validity,
-                                           eg_psg_groups, perc_tt_config, rng);
+  // Start solution for local search. calc_perc_tt_dist is used
+  auto greedy_solution = greedy_assignment(
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, rng, calc_perc_tt_dist);
 
-  for (auto i = 0u; i < greedy_solution.size(); ++i) {
-    std::cout << "Psg: " << i << " count: " << eg_psg_groups[i].psg_count_
-              << " edges : " << std::endl;
-    for (auto const& e : greedy_solution[i]) {
-      auto trp = (e->trip_ == nullptr)
-                     ? "-"
-                     : std::to_string(e->trip_->id_.primary_.train_nr_);
-      std::cout << "  train " << trp << " type " << e->type_ << " from "
-                << sched.stations_[e->from_->station_]->name_ << " to "
-                << sched.stations_[e->to_->station_]->name_ << " at "
-                << format_time(e->from_->time_) << " - "
-                << format_time(e->to_->time_) << " cost " << e->cost_
-                << std::endl;
-    }
+  print_solution_statistics(greedy_solution, eg_psg_groups, sched);
+
+  for (auto const& sol : greedy_solution) {
+    std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
   }
+  std::cout << std::fixed << "CUMULATIVE "
+            << calc_perc_tt_for_scenario(eg_psg_groups, greedy_solution,
+                                         perc_tt_config)
+            << std::endl;
 
-  // TODO: another heuristic algorithms
+  auto ls_solution = local_search(
+      eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
+      nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
+
+  for (auto const& sol : ls_solution) {
+    std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
+  }
+  std::cout << std::fixed << "CUMULATIVE AFTER LS "
+            << calc_perc_tt_for_scenario(eg_psg_groups, ls_solution,
+                                         perc_tt_config)
+            << std::endl;
 
   throw std::runtime_error("heuristic algorithms finished");
 

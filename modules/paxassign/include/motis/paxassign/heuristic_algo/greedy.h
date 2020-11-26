@@ -22,7 +22,9 @@ std::vector<std::vector<eg_edge*>> greedy_assignment(
     {
       logging::scoped_timer greedy{"greedy algorithm"};
       solution[psgs_indices[i]] = sssd_dijkstra<double>(
-          eg_psg_groups[psgs_indices[i]], 0.0,
+          eg_psg_groups[psgs_indices[i]].from_,
+          eg_psg_groups[psgs_indices[i]].to_,
+          eg_psg_groups[psgs_indices[i]].psg_count_, 0.0,
           std::numeric_limits<double>::max(), te_graph,
           nodes_validity[psgs_indices[i]], max_interchanges, obj_f);
       add_psgs_to_edges(solution[psgs_indices[i]],
