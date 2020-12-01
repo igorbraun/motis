@@ -42,14 +42,24 @@ cap_ILP_solution build_ILP_from_scenario_API(
     for (auto const& e : handled_edges) {
       switch (e->type_) {
         case edge_type::TRIP: {
-          uint32_t last_cap_step = 0;
+          uint64_t last_cap_step = 0;
           for (auto const [i, penalty] :
                utl::enumerate(config.tt_and_waiting_penalties_)) {
-            auto curr_cap_step = uint32_t(
-                e->capacity_ * config.cost_function_capacity_steps_[i]);
+            auto curr_cap_step =
+                uint64_t(e->soft_cap_boundary_ *
+                         config.cost_function_capacity_steps_[i]);
+            uint64_t remaining_cap = 0;
+            if (e->passengers_ > curr_cap_step) {
+              remaining_cap = 0;
+            } else {
+              if (e->passengers_ > last_cap_step) {
+                remaining_cap = curr_cap_step - e->passengers_;
+              } else {
+                remaining_cap = curr_cap_step - last_cap_step;
+              }
+            }
             edge_cost_vars[e->id_].push_back(model.addVar(
-                0.0, curr_cap_step - last_cap_step, penalty * e->tt_,
-                GRB_INTEGER,
+                0.0, remaining_cap, penalty * e->tt_, GRB_INTEGER,
                 "T_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
             last_cap_step = curr_cap_step;
           }
@@ -59,11 +69,21 @@ cap_ILP_solution build_ILP_from_scenario_API(
           uint32_t last_cap_step = 0;
           for (auto const [i, penalty] :
                utl::enumerate(config.tt_and_waiting_penalties_)) {
-            auto curr_cap_step = uint32_t(
-                e->capacity_ * config.cost_function_capacity_steps_[i]);
+            auto curr_cap_step =
+                uint64_t(e->soft_cap_boundary_ *
+                         config.cost_function_capacity_steps_[i]);
+            uint64_t remaining_cap = 0;
+            if (e->passengers_ > curr_cap_step) {
+              remaining_cap = 0;
+            } else {
+              if (e->passengers_ > last_cap_step) {
+                remaining_cap = curr_cap_step - e->passengers_;
+              } else {
+                remaining_cap = curr_cap_step - last_cap_step;
+              }
+            }
             edge_cost_vars[e->id_].push_back(model.addVar(
-                0.0, curr_cap_step - last_cap_step, penalty * e->tt_,
-                GRB_INTEGER,
+                0.0, remaining_cap, penalty * e->tt_, GRB_INTEGER,
                 "W_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
             last_cap_step = curr_cap_step;
           }
@@ -77,9 +97,9 @@ cap_ILP_solution build_ILP_from_scenario_API(
           break;
         }
         case edge_type::NOROUTE: {
-          edge_cost_vars[e->id_].push_back(
-              model.addVar(0.0, std::numeric_limits<double>::max(), 0,
-                           GRB_INTEGER, "NR_f_" + std::to_string(e->id_)));
+          edge_cost_vars[e->id_].push_back(model.addVar(
+              0.0, std::numeric_limits<double>::max(), config.no_route_cost_,
+              GRB_INTEGER, "NR_f_" + std::to_string(e->id_)));
           break;
         }
       }
@@ -298,7 +318,7 @@ void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
         uint32_t last_cap_step = 0;
         for (auto const [i, step] :
              utl::enumerate(config.cost_function_capacity_steps_)) {
-          auto curr_cap_step = uint32_t(e->capacity_ * step);
+          auto curr_cap_step = uint32_t(e->soft_cap_boundary_ * step);
           ilp_file << "0 <= f_" << std::to_string(e->id_) << "_"
                    << std::to_string(i)
                    << " <= " << std::to_string(curr_cap_step - last_cap_step)
