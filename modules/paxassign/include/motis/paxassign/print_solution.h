@@ -18,6 +18,8 @@ void print_solution_routes(std::vector<std::vector<eg_edge*>> const& solution,
                 << format_time(e->to_->time_) << " cost " << e->cost_
                 << std::endl;
     }
+    std::cout << "route cost: "
+              << calc_perc_tt(solution[i], perceived_tt_config{}) << std::endl;
   }
 }
 void print_solution_statistics(
