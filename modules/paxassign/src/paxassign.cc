@@ -132,8 +132,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  // cap_ilp_assignment(combined_groups, data, sched);
-  // whole_graph_ilp_assignment(combined_groups, data, sched);
+  cap_ilp_assignment(combined_groups, data, sched);
+  node_arc_ilp_assignment(combined_groups, data, sched);
   heuristic_assignments(combined_groups, data, sched);
 }
 
@@ -198,6 +198,7 @@ void paxassign::cap_ilp_assignment(
 
   {
     scoped_timer no_alt_timer{"remove cpg with no alternatives"};
+    // TODO: don't erase them, just set something like no route status
     for (auto& cgs : combined_groups) {
       uint32_t cpg_idx = 0;
       while (cpg_idx < cgs.second.size()) {
@@ -271,10 +272,16 @@ void paxassign::cap_ilp_assignment(
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
-  cap_ILP_edge no_route_edge{curr_e_id++, 100000, 100000, edge_type::NOROUTE};
+
+  perceived_tt_config perc_tt_config{};
+  cap_ILP_edge no_route_edge{curr_e_id++,
+                             perc_tt_config.no_route_cost_,
+                             std::numeric_limits<std::uint64_t>::max(),
+                             std::numeric_limits<std::uint64_t>::max(),
+                             0,
+                             edge_type::NOROUTE};
 
   std::vector<cap_ILP_psg_group> cap_ILP_scenario;
-  perceived_tt_config ILP_config{};
   {
     scoped_timer alt_timer{"build data for capacitated model"};
     for (auto& cgs : combined_groups) {
@@ -300,16 +307,16 @@ void paxassign::cap_ilp_assignment(
               }
 
               if (cap_edges.find(td->edges_[i]) == cap_edges.end()) {
-                uint32_t remaining_cap =
-                    (td->edges_[i]->capacity() < td->edges_[i]->passengers_)
-                        ? 0
-                        : td->edges_[i]->capacity() -
-                              td->edges_[i]->passengers_;
                 cap_edges[td->edges_[i]] = cap_ILP_edge{
                     curr_e_id++,
                     static_cast<uint32_t>(td->edges_[i]->to_->current_time() -
                                           td->edges_[i]->from_->current_time()),
-                    remaining_cap, edge_type::TRIP};
+                    td->edges_[i]->capacity(),
+                    static_cast<uint64_t>(
+                        td->edges_[i]->capacity() *
+                        perc_tt_config.cost_function_capacity_steps_.back()),
+                    td->edges_[i]->passengers_,
+                    edge_type::TRIP};
               }
               curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
 
@@ -320,16 +327,18 @@ void paxassign::cap_ilp_assignment(
                   if (oe->type_ == motis::paxmon::edge_type::WAIT &&
                       oe->to_ == td->edges_[i + 1]->from_) {
                     if (cap_edges.find(oe.get()) == cap_edges.end()) {
-                      uint32_t remaining_cap =
-                          (oe->capacity() < oe->passengers_)
-                              ? 0
-                              : oe->capacity() - oe->passengers_;
                       cap_edges[oe.get()] = cap_ILP_edge{
                           curr_e_id++,
                           static_cast<uint32_t>(
                               td->edges_[i + 1]->from_->current_time() -
                               td->edges_[i]->to_->current_time()),
-                          remaining_cap, edge_type::WAIT};
+                          oe->capacity(),
+                          static_cast<uint64_t>(
+                              oe->capacity() *
+                              perc_tt_config.cost_function_capacity_steps_
+                                  .back()),
+                          oe->passengers_,
+                          edge_type::WAIT};
                     }
                     curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
                   }
@@ -352,7 +361,11 @@ void paxassign::cap_ilp_assignment(
                     oe->to_ == td_next->edges_[inch_target_st_idx]->from_) {
                   if (cap_edges.find(oe.get()) == cap_edges.end()) {
                     cap_edges[oe.get()] =
-                        cap_ILP_edge{curr_e_id++, oe->transfer_time(), 100000,
+                        cap_ILP_edge{curr_e_id++,
+                                     oe->transfer_time(),
+                                     std::numeric_limits<std::uint64_t>::max(),
+                                     std::numeric_limits<std::uint64_t>::max(),
+                                     0,
                                      edge_type::INTERCHANGE};
                   }
                   curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
@@ -369,7 +382,7 @@ void paxassign::cap_ilp_assignment(
           cpg_ILP_connections.push_back(curr_connection);
         }
         cpg_ILP_connections.push_back(cap_ILP_connection{
-            curr_alt_id++, ILP_config.no_route_cost_, {&no_route_edge}});
+            curr_alt_id++, perc_tt_config.no_route_cost_, {&no_route_edge}});
         cap_ilp_psg_to_cpg[curr_cpg_id] = &cpg;
         cap_ILP_scenario.push_back(cap_ILP_psg_group{
             curr_cpg_id++, cpg_ILP_connections, cpg.passengers_});
@@ -383,11 +396,38 @@ void paxassign::cap_ilp_assignment(
     std::srand(std::time(nullptr));
     int random_variable = std::rand();
     sol =
-        build_ILP_from_scenario_API(cap_ILP_scenario, ILP_config,
+        build_ILP_from_scenario_API(cap_ILP_scenario, perc_tt_config,
                                     std::to_string(cap_ILP_scenario.size()) +
                                         "_" + std::to_string(random_variable));
   }
 
+  for (auto& assignment : sol.alt_to_use_) {
+    if (cap_ilp_psg_to_cpg[assignment.first]->alternatives_.size() <=
+        assignment.second) {
+      std::cout << "NO ROUTE ALTERNATIVE for "
+                << cap_ilp_psg_to_cpg[assignment.first]->groups_[0]->id_
+                << " with " << cap_ilp_psg_to_cpg[assignment.first]->passengers_
+                << " passengers" << std::endl;
+    } else {
+      auto cj = motis::paxmon::to_compact_journey(
+          cap_ilp_psg_to_cpg[assignment.first]
+              ->alternatives_[assignment.second]
+              .journey_,
+          sched);
+      std::cout << "ROUTE for "
+                << cap_ilp_psg_to_cpg[assignment.first]->groups_[0]->id_
+                << " with " << cap_ilp_psg_to_cpg[assignment.first]->passengers_
+                << " passengers:" << std::endl;
+      for (auto const& leg : cj.legs_) {
+        std::cout << leg.trip_.train_nr_ << std::endl;
+      }
+    }
+  }
+
+  // throw std::runtime_error("time expanded graph is built");
+  add_psgs_to_edges(combined_groups);
+
+  /* TODO: for future evaluation
   std::ofstream stats_file;
   stats_file.open("motis/build/rel/ilp_files/ILP_stats.csv",
                   std::ios_base::app);
@@ -396,9 +436,10 @@ void paxassign::cap_ilp_assignment(
              << "," << sol.stats_.no_alt_found_ << "," << sol.stats_.obj_
              << std::endl;
   stats_file.close();
+   */
 
-  add_psgs_to_edges(combined_groups);
-
+  /* TODO: now it returns a compact journey as response, but since it will be
+  done differently in other algorithms, I suppose it will also be changed
   message_creator mc;
   std::vector<flatbuffers::Offset<ConnAssignment>> fbs_assignments;
 
@@ -424,38 +465,34 @@ void paxassign::cap_ilp_assignment(
       CreateConnAssignments(mc, mc.CreateVector(fbs_assignments)).Union(),
       "/paxassign/ilp_result");
   ctx::await_all(motis_publish(make_msg(mc)));
+*/
 }
 
-void paxassign::whole_graph_ilp_assignment(
+void paxassign::node_arc_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
   remove_psgs_from_edges(combined_groups);
 
-  node_arc_config config{1.2, 30, 6, 100000};
+  node_arc_config config{1.2, 30, 6, 10000};
   auto te_graph = build_time_expanded_graph(data, sched, config);
 
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, config, te_graph);
 
-  auto solution = build_whole_graph_ilp(eg_psg_groups, te_graph, config, sched);
+  auto solution = node_arc_ilp(eg_psg_groups, te_graph, config, sched);
 
-  for (auto i = 0u; i < solution.size(); ++i) {
-    std::cout << "Psg: " << i << " count: " << eg_psg_groups[i].psg_count_
-              << " edges : " << std::endl;
-    for (auto const& e : solution[i]) {
-      auto trp = (e->trip_ == nullptr)
-                     ? "-"
-                     : std::to_string(e->trip_->id_.primary_.train_nr_);
-      std::cout << "  train " << trp << " type " << e->type_ << " from "
-                << sched.stations_[e->from_->station_]->name_ << " to "
-                << sched.stations_[e->to_->station_]->name_ << " at "
-                << format_time(e->from_->time_) << " - "
-                << format_time(e->to_->time_) << " cost " << e->cost_
-                << std::endl;
-    }
+  perceived_tt_config perc_tt_config;
+  double final_obj =
+      get_obj_after_assign(eg_psg_groups, solution, perc_tt_config);
+  std::cout << "NODE-ARC ILP CUMULATIVE " << final_obj << std::endl;
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    add_psgs_to_edges(solution[i], eg_psg_groups[i]);
   }
-
-  throw std::runtime_error("time expanded graph is built");
+  print_solution_routes(solution, eg_psg_groups, sched);
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
+  }
+  //throw std::runtime_error("time expanded graph is built");
 
   add_psgs_to_edges(combined_groups);
 }
@@ -473,8 +510,8 @@ void paxassign::heuristic_assignments(
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
 
   // TODO: for subset-scenario (only long dist stations) nodes validity has the
-  // size of 3,53 mb. If during evaluation it will be to big, remove nodes
-  // validity at all and do all the stuff without it
+  // size of 3,53 mb per psg. If during evaluation it will be too big, remove
+  // nodes validity at all and do all the stuff without it
   config_graph_reduction reduction_config;
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
@@ -517,30 +554,34 @@ void paxassign::heuristic_assignments(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, rng, calc_perc_tt_dist);
 
-  print_solution_statistics(greedy_solution, eg_psg_groups, sched);
-
+  /*
   for (auto const& sol : greedy_solution) {
     std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
   }
-  std::cout << std::fixed << "CUMULATIVE "
-            << calc_perc_tt_for_scenario(eg_psg_groups, greedy_solution,
-                                         perc_tt_config)
+  */
+  std::cout << std::fixed << "GREEDY CUMULATIVE "
+            << get_obj_after_assign(eg_psg_groups, greedy_solution,
+                                    perc_tt_config)
             << std::endl;
+  print_solution_statistics(greedy_solution, eg_psg_groups, sched);
 
-  auto ls_solution = local_search(
-      eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
-      nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
-
-  for (auto const& sol : ls_solution) {
-    std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
+  {
+    scoped_timer alt_timer{"LOCAL SEARCH"};
+    auto ls_solution = local_search(
+        eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
+        nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
+    /*
+        for (auto const& sol : ls_solution) {
+          std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
+        }
+    */
+    std::cout << std::fixed << "LS CUMULATIVE "
+              << get_obj_after_assign(eg_psg_groups, ls_solution,
+                                      perc_tt_config)
+              << std::endl;
   }
-  std::cout << std::fixed << "CUMULATIVE AFTER LS "
-            << calc_perc_tt_for_scenario(eg_psg_groups, ls_solution,
-                                         perc_tt_config)
-            << std::endl;
 
   throw std::runtime_error("heuristic algorithms finished");
-
   add_psgs_to_edges(combined_groups);
 }
 

@@ -34,7 +34,7 @@ private:
       std::map<unsigned, std::vector<combined_passenger_group>>&
           combined_groups,
       paxmon_data& data, schedule const& sched);
-  void whole_graph_ilp_assignment(
+  void node_arc_ilp_assignment(
       std::map<unsigned, std::vector<combined_passenger_group>>&
           combined_groups,
       paxmon_data& data, schedule const& sched);
