@@ -7,7 +7,9 @@ enum class edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT, NOROUTE };
 struct cap_ILP_edge {
   uint32_t id_;
   uint32_t tt_;
-  ulong capacity_;
+  std::uint64_t soft_cap_boundary_{};
+  std::uint64_t hard_cap_boundary_{};
+  std::uint64_t passengers_{};
   edge_type type_;
 };
 
