@@ -381,8 +381,8 @@ void paxassign::cap_ilp_assignment(
           curr_connection.associated_waiting_time_ = associated_waiting_time;
           cpg_ILP_connections.push_back(curr_connection);
         }
-        cpg_ILP_connections.push_back(cap_ILP_connection{
-            curr_alt_id++, perc_tt_config.no_route_cost_, {&no_route_edge}});
+        cpg_ILP_connections.push_back(
+            cap_ILP_connection{curr_alt_id++, 0, {&no_route_edge}});
         cap_ilp_psg_to_cpg[curr_cpg_id] = &cpg;
         cap_ILP_scenario.push_back(cap_ILP_psg_group{
             curr_cpg_id++, cpg_ILP_connections, cpg.passengers_});
@@ -492,7 +492,7 @@ void paxassign::node_arc_ilp_assignment(
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
   }
-  //throw std::runtime_error("time expanded graph is built");
+  // throw std::runtime_error("time expanded graph is built");
 
   add_psgs_to_edges(combined_groups);
 }
