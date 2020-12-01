@@ -8,7 +8,7 @@
 
 namespace motis::paxassign {
 
-std::vector<std::vector<eg_edge*>> build_whole_graph_ilp(
+std::vector<std::vector<eg_edge*>> node_arc_ilp(
     std::vector<eg_psg_group>& psg_groups, time_expanded_graph const& te_graph,
     node_arc_config const& config, schedule const& sched) {
   try {
