@@ -390,17 +390,27 @@ void paxassign::cap_ilp_assignment(
     }
   }
 
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values;
   cap_ILP_solution sol;
   {
     scoped_timer alt_timer{"solve capacitated model"};
     std::srand(std::time(nullptr));
     int random_variable = std::rand();
-    sol =
-        build_ILP_from_scenario_API(cap_ILP_scenario, perc_tt_config,
-                                    std::to_string(cap_ILP_scenario.size()) +
-                                        "_" + std::to_string(random_variable));
+    sol = build_ILP_from_scenario_API(cap_ILP_scenario, perc_tt_config,
+                                      std::to_string(cap_ILP_scenario.size()) +
+                                          "_" + std::to_string(random_variable),
+                                      variables_with_values);
   }
 
+  std::cout << "manually calculated perc_tt of halle ILP : "
+            << piecewise_linear_convex_perceived_tt(
+                   cap_ILP_scenario, sol.alt_to_use_, perc_tt_config,
+                   variables_with_values)
+            << std::endl;
+  throw std::runtime_error("time expanded graph is built");
+
+  /*
   for (auto& assignment : sol.alt_to_use_) {
     if (cap_ilp_psg_to_cpg[assignment.first]->alternatives_.size() <=
         assignment.second) {
@@ -423,7 +433,7 @@ void paxassign::cap_ilp_assignment(
       }
     }
   }
-
+*/
   // throw std::runtime_error("time expanded graph is built");
   add_psgs_to_edges(combined_groups);
 

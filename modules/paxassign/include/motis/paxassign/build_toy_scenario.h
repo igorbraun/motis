@@ -200,7 +200,11 @@ void build_toy_scenario() {
   std::vector<cap_ILP_psg_group> psg_groups{pg1, pg2, pg3, pg4};
 
   // build_ILP_from_scenario(psg_groups, config, "1");
-  auto sol = build_ILP_from_scenario_API(psg_groups, config, "1");
+
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values;
+  auto sol = build_ILP_from_scenario_API(psg_groups, config, "1",
+                                         variables_with_values);
   for (auto i = 0u; i < psg_groups.size(); ++i) {
     std::cout << "pg " << psg_groups[i].id_ << " should use "
               << psg_groups[i].alternatives_[sol.alt_to_use_[i].second].id_

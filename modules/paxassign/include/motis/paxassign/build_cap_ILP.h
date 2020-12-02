@@ -13,7 +13,9 @@ namespace motis::paxassign {
 
 cap_ILP_solution build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
-    perceived_tt_config const& config, std::string const&) {
+    perceived_tt_config const& config, std::string const&,
+    std::map<std::string, std::tuple<double, double, double, double>>&
+        variables_with_values) {
   try {
     std::set<cap_ILP_edge const*> handled_edges;
     std::map<uint32_t, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
@@ -58,10 +60,11 @@ cap_ILP_solution build_ILP_from_scenario_API(
                 remaining_cap = curr_cap_step - last_cap_step;
               }
             }
+            last_cap_step = curr_cap_step;
+            if (remaining_cap == 0) continue;
             edge_cost_vars[e->id_].push_back(model.addVar(
                 0.0, remaining_cap, penalty * e->tt_, GRB_INTEGER,
                 "T_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
-            last_cap_step = curr_cap_step;
           }
           break;
         }
@@ -82,10 +85,11 @@ cap_ILP_solution build_ILP_from_scenario_API(
                 remaining_cap = curr_cap_step - last_cap_step;
               }
             }
+            last_cap_step = curr_cap_step;
+            if (remaining_cap == 0) continue;
             edge_cost_vars[e->id_].push_back(model.addVar(
                 0.0, remaining_cap, penalty * e->tt_, GRB_INTEGER,
                 "W_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
-            last_cap_step = curr_cap_step;
           }
           break;
         }
@@ -115,7 +119,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
     for (auto const& pg : passengers) {
       for (auto const& a : pg.alternatives_) {
         alt_route_vars[pg.id_].push_back(model.addVar(
-            0.0, 1.0, a.associated_waiting_time_, GRB_BINARY,
+            0.0, 1.0, pg.psg_count_ * a.associated_waiting_time_, GRB_BINARY,
             "y_" + std::to_string(pg.id_) + "_" + std::to_string(a.id_)));
       }
     }
@@ -203,6 +207,27 @@ cap_ILP_solution build_ILP_from_scenario_API(
       }
     }
 
+    for (auto const& arv : alt_route_vars) {
+      for (auto const& curr_arv : arv) {
+        variables_with_values[curr_arv.get(GRB_StringAttr_VarName)] =
+            std::make_tuple(curr_arv.get(GRB_DoubleAttr_X),
+                            curr_arv.get(GRB_DoubleAttr_Obj),
+                            curr_arv.get(GRB_DoubleAttr_X) *
+                                curr_arv.get(GRB_DoubleAttr_Obj),
+                            curr_arv.get(GRB_DoubleAttr_UB));
+      }
+    }
+    for (auto const& ecv : edge_cost_vars) {
+      for (auto const& curr_ecv : ecv) {
+        variables_with_values[curr_ecv.get(GRB_StringAttr_VarName)] =
+            std::make_tuple(curr_ecv.get(GRB_DoubleAttr_X),
+                            curr_ecv.get(GRB_DoubleAttr_Obj),
+                            curr_ecv.get(GRB_DoubleAttr_X) *
+                                curr_ecv.get(GRB_DoubleAttr_Obj),
+                            curr_ecv.get(GRB_DoubleAttr_UB));
+      }
+    }
+
     cap_ILP_solution solution{
         cap_ILP_stats{passengers.size(), no_alt, model.get(GRB_IntAttr_NumVars),
                       model.get(GRB_IntAttr_NumGenConstrs) +
@@ -210,6 +235,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
                       model.get(GRB_DoubleAttr_Runtime),
                       model.get(GRB_DoubleAttr_ObjVal)},
         alt_to_use};
+
     return solution;
 
   } catch (GRBException e) {
