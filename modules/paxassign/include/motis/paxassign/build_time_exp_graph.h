@@ -107,8 +107,8 @@ std::vector<eg_edge*> add_trip(schedule const& sched,
     auto hard_capacity =
         (std::uint16_t)config.hard_capacity_ratio_ * soft_capacity;
     auto capacity_utilization =
-        get_edge_capacity_utilization(dep_node, arr_node, et, data);
-    auto edge_psgs = get_edge_psgs(dep_node, arr_node, et, data);
+        get_edge_capacity_utilization(dep_node, arr_node, et, data, sched);
+    auto edge_psgs = get_edge_psgs(dep_node, arr_node, et, data, sched);
     edges.emplace_back(add_edge(make_trip_edge(
         dep_node, arr_node, eg_edge_type::TRIP, trp, soft_capacity,
         hard_capacity, edge_psgs, capacity_utilization, lc.full_con_->clasz_)));

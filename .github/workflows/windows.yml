@@ -55,16 +55,16 @@ jobs:
           Import-Module $devShell
           Enter-VsDevShell -VsInstallPath $installPath -SkipAutomaticLocation -DevCmdArguments "-arch=amd64"
           cmake -GNinja -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.mode }}
-          .\build\bin\buildcache.exe -z
+          .\build\buildcache\bin\buildcache.exe -z
           cmake --build build --target motis motis-test motis-itest motis-eval motis-intermodal-eval
-          .\build\bin\buildcache.exe -s
+          .\build\buildcache\bin\buildcache.exe -s
 
       # ==== TESTS ====
       - name: Run Test Mode
         run: >
           .\build\motis
           --mode test
-          --import.paths base/loader/test_resources/hrd_schedules/single-ice
+          --import.paths schedule:base/loader/test_resources/hrd_schedules/single-ice
           --dataset.begin 20151004
           --dataset.write_serialized false
           --exclude_modules address osrm parking path ppr tiles

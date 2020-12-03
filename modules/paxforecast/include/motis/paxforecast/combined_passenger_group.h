@@ -16,6 +16,7 @@ struct combined_passenger_group {
   std::uint16_t passengers_{};
   motis::paxmon::passenger_localization localization_;
   std::vector<motis::paxmon::passenger_group const*> groups_;
+  // TODO: move it to paxassign, paxforecast should be deactivated at all
   std::vector<alternative> alternatives_;
 };
 

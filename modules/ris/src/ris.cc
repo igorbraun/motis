@@ -1,13 +1,14 @@
 #include "motis/ris/ris.h"
 
-#include <motis/core/conv/trip_conv.h>
-#include <utl/parser/file.h>
+#include <cstdint>
 #include <atomic>
+#include <limits>
 #include <optional>
 
 #include "boost/filesystem.hpp"
 
 #include "utl/concat.h"
+#include "utl/parser/file.h"
 
 #include "conf/date_time.h"
 
@@ -84,7 +85,6 @@ constexpr T ceil(T const i, T const multiple) {
 using size_type = uint32_t;
 constexpr auto const SIZE_TYPE_SIZE = sizeof(size_type);
 
-constexpr auto const SECONDS_A_DAY = time_t{24 * 60 * 60};
 constexpr time_t day(time_t t) { return (t / SECONDS_A_DAY) * SECONDS_A_DAY; }
 constexpr time_t next_day(time_t t) { return day(t) + SECONDS_A_DAY; }
 
@@ -148,7 +148,9 @@ struct ris::impl {
   void read_gtfs_trip_ids() const {
     auto& sched = get_schedule();
     auto const trips = utl::file{gtfs_trip_ids_path_.c_str(), "r"}.content();
-    auto const trips_msg = make_msg(trips.data(), trips.size());
+    auto const trips_msg =
+        make_msg(trips.data(), trips.size(), DEFAULT_FBS_MAX_DEPTH,
+                 std::numeric_limits<std::uint32_t>::max());
     for (auto const& id : *motis_content(RISGTFSRTMapping, trips_msg)->ids()) {
       try {
         sched.gtfs_trip_ids_.emplace(
@@ -284,10 +286,10 @@ private:
 
   void forward(time_t const to) {
     auto const& sched = get_schedule();
-    auto const first_schedule_event_day =
-        floor(sched.first_event_schedule_time_, SECONDS_A_DAY);
-    auto const last_schedule_event_day =
-        ceil(sched.last_event_schedule_time_, SECONDS_A_DAY);
+    auto const first_schedule_event_day = floor(
+        sched.first_event_schedule_time_, static_cast<time_t>(SECONDS_A_DAY));
+    auto const last_schedule_event_day = ceil(
+        sched.last_event_schedule_time_, static_cast<time_t>(SECONDS_A_DAY));
     auto const min_timestamp =
         get_min_timestamp(first_schedule_event_day, last_schedule_event_day);
     if (min_timestamp) {

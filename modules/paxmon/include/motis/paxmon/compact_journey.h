@@ -4,15 +4,19 @@
 #include <optional>
 #include <vector>
 
+#include "cista/reflection/comparable.h"
+
 #include "motis/core/schedule/time.h"
-#include "motis/core/journey/extern_trip.h"
+#include "motis/core/schedule/trip.h"
 
 #include "motis/paxmon/transfer_info.h"
 
 namespace motis::paxmon {
 
 struct journey_leg {
-  motis::extern_trip trip_;
+  CISTA_COMPARABLE()
+
+  trip const* trip_;
   unsigned enter_station_id_;
   unsigned exit_station_id_;
   motis::time enter_time_;
@@ -29,6 +33,8 @@ inline bool operator==(journey_leg const& lhs, journey_leg const& rhs) {
 }
 
 struct compact_journey {
+  CISTA_COMPARABLE()
+
   std::vector<journey_leg> legs_;
 
   inline unsigned destination_station_id() const {

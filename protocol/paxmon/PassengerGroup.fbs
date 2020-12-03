@@ -12,4 +12,7 @@ table PassengerGroup {
   source: DataSource;
   passenger_count: uint;
   planned_journey: CompactJourney;
+  probability: float;
+  planned_arrival_time: ulong;
+  source_flags: ubyte;
 }

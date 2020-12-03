@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <regex>
@@ -12,11 +13,14 @@
 
 #include "fmt/ostream.h"
 
+#include "utl/nwise.h"
 #include "utl/parser/buf_reader.h"
 #include "utl/parser/csv_range.h"
 #include "utl/parser/file.h"
 #include "utl/parser/line_range.h"
 #include "utl/pipes/for_each.h"
+#include "utl/to_vec.h"
+#include "utl/verify.h"
 
 #include "motis/core/common/logging.h"
 #include "motis/core/schedule/time.h"
@@ -26,6 +30,7 @@
 
 #include "motis/paxmon/loader/csv/row.h"
 #include "motis/paxmon/util/get_station_idx.h"
+#include "motis/paxmon/util/interchange_time.h"
 
 using namespace motis::logging;
 using namespace motis::paxmon::util;
@@ -181,15 +186,6 @@ trip_candidate get_best_trip_candidate(schedule const& sched,
   return best;
 }
 
-trip* find_trip(schedule const& sched, std::uint32_t from_station_idx,
-                std::uint32_t to_station_idx, time enter_time, time exit_time,
-                std::uint32_t train_nr, duration max_time_diff) {
-  auto const best_candidate =
-      get_best_trip_candidate(sched, from_station_idx, to_station_idx,
-                              enter_time, exit_time, train_nr, max_time_diff);
-  return best_candidate.trp_;
-}
-
 void debug_trip_match(schedule const& sched, std::uint32_t from_station_idx,
                       std::uint32_t to_station_idx, time enter_time,
                       time exit_time, std::uint32_t train_nr,
@@ -225,53 +221,114 @@ void debug_trip_match(schedule const& sched, std::uint32_t from_station_idx,
   match_log << "\n";
 }
 
-std::optional<time> get_footpath_duration(schedule const& sched,
-                                          std::uint32_t from_station_idx,
-                                          std::uint32_t to_station_idx) {
-  for (auto const& fp :
-       sched.stations_[from_station_idx]->outgoing_footpaths_) {
-    if (fp.to_station_ == to_station_idx) {
-      return {fp.duration_};
-    }
+struct input_journey_leg {
+  inline bool stations_found() const {
+    return from_station_idx_ && to_station_idx_;
   }
-  return {};
-}
+
+  inline bool valid_times() const {
+    return enter_time_ != INVALID_TIME && exit_time_ != INVALID_TIME;
+  }
+
+  inline bool trip_found() const { return trp_candidate_.trp_ != nullptr; }
+
+  journey_leg to_journey_leg() const {
+    utl::verify(stations_found(),
+                "input_journey_leg.to_journey_leg(): stations not found");
+    utl::verify(valid_times(),
+                "input_journey_leg.to_journey_leg(): invalid times");
+    utl::verify(trip_found(),
+                "input_journey_leg.to_journey_leg(): trip not found");
+    return journey_leg{trp_candidate_.trp_,
+                       from_station_idx_.value(),
+                       to_station_idx_.value(),
+                       enter_time_,
+                       exit_time_,
+                       enter_transfer_};
+  }
+
+  std::optional<std::uint32_t> from_station_idx_;
+  std::optional<std::uint32_t> to_station_idx_;
+  time enter_time_{INVALID_TIME};
+  time exit_time_{INVALID_TIME};
+  trip_candidate trp_candidate_;
+  std::optional<transfer_info> enter_transfer_;
+};
 
 std::optional<transfer_info> get_transfer_info(
-    schedule const& sched, compact_journey const& partial_journey,
-    std::uint32_t enter_station_idx, time enter_time) {
-  if (partial_journey.legs_.empty()) {
+    schedule const& sched,
+    std::vector<input_journey_leg> const& partial_journey,
+    std::uint32_t enter_station_idx) {
+  if (partial_journey.size() < 2) {
     return {};
   }
-  auto const& prev_leg = partial_journey.legs_.back();
-  if (prev_leg.exit_station_id_ == enter_station_idx) {
-    auto const journey_ic =
-        static_cast<duration>(enter_time - prev_leg.exit_time_);
-    return transfer_info{
-        std::min(static_cast<duration>(
-                     sched.stations_[enter_station_idx]->transfer_time_),
-                 journey_ic),
-        transfer_info::type::SAME_STATION};
-  } else {
-    auto const walk_duration =
-        get_footpath_duration(sched, prev_leg.exit_station_id_,
-                              enter_station_idx)
-            .value_or(enter_time - prev_leg.exit_time_);
-    return transfer_info{static_cast<duration>(walk_duration),
-                         transfer_info::type::FOOTPATH};
+  auto const& prev_leg = partial_journey[partial_journey.size() - 2];
+  if (!prev_leg.to_station_idx_ || prev_leg.exit_time_ == INVALID_TIME) {
+    return {};
+  }
+  return util::get_transfer_info(sched, prev_leg.to_station_idx_.value(),
+                                 enter_station_idx);
+}
+
+void write_match_log(
+    std::ofstream& match_log, schedule const& sched,
+    input_journey_leg const& leg,
+    std::optional<std::pair<std::uint64_t, std::uint64_t>> const& current_id,
+    struct row const& row,
+    std::vector<input_journey_leg> const& current_input_legs,
+    duration const debug_match_tolerance) {
+  if (!match_log) {
+    return;
+  }
+  if (!leg.stations_found()) {
+    if (!leg.from_station_idx_) {
+      fmt::print(match_log, "[{}] Station not found: {}\n", current_id,
+                 row.from_.val().view());
+    }
+    if (!leg.to_station_idx_) {
+      fmt::print(match_log, "[{}] Station not found: {}\n", current_id,
+                 row.to_.val().view());
+    }
+  }
+  if (!leg.valid_times()) {
+    if (leg.enter_time_ == INVALID_TIME) {
+      fmt::print(match_log, "[{}] Invalid enter timestamp: {}\n", current_id,
+                 format_unix_time(row.enter_.val()));
+    }
+    if (leg.exit_time_ == INVALID_TIME) {
+      fmt::print(match_log, "[{}] Invalid exit timestamp: {}\n", current_id,
+                 format_unix_time(row.exit_.val()));
+    }
+  }
+  if (!leg.trip_found()) {
+    fmt::print(match_log,
+               "[{}] Trip not found: from={:7}, to={:7}, enter={}, "
+               "exit={}, train_nr={:6}, category={:6}, leg={}\n",
+               current_id, row.from_.val().view(), row.to_.val().view(),
+               format_unix_time(row.enter_.val()),
+               format_unix_time(row.exit_.val()), row.train_nr_.val(),
+               row.category_.val().view(), current_input_legs.size());
+    if (leg.stations_found() && leg.valid_times()) {
+      debug_trip_match(
+          sched, leg.from_station_idx_.value(), leg.to_station_idx_.value(),
+          leg.enter_time_, leg.exit_time_, row.train_nr_.val(),
+          row.category_.val().view(), match_log, debug_match_tolerance);
+    }
   }
 }
 
-std::size_t load_journeys(schedule const& sched, paxmon_data& data,
-                          std::string const& journey_file,
-                          std::string const& match_log_file,
-                          duration const match_tolerance) {
+loader_result load_journeys(schedule const& sched, paxmon_data& data,
+                            std::string const& journey_file,
+                            std::string const& match_log_file,
+                            duration const match_tolerance) {
   auto const debug_match_tolerance = match_tolerance + 60;
-  std::size_t journey_count = 0;
-  auto error_count = 0ULL;
-  auto trip_not_found_count = 0ULL;
-  auto station_not_found_count = 0ULL;
-  auto invalid_timestamp_count = 0ULL;
+  auto result = loader_result{};
+  auto journeys_with_invalid_legs = 0ULL;
+  auto journeys_with_no_valid_legs = 0ULL;
+  auto journeys_with_inexact_matches = 0ULL;
+  auto journeys_with_missing_trips = 0ULL;
+  auto journeys_with_missing_transfers = 0ULL;
+  auto journeys_with_invalid_transfer_times = 0ULL;
 
   auto buf = utl::file(journey_file.data(), "r").content();
   auto const file_content = utl::cstr{buf.data(), buf.size()};
@@ -282,27 +339,108 @@ std::size_t load_journeys(schedule const& sched, paxmon_data& data,
   }
 
   auto current_id = std::optional<std::pair<std::uint64_t, std::uint64_t>>{};
-  auto current_journey = compact_journey{};
+  auto current_input_legs = std::vector<input_journey_leg>{};
   std::uint16_t current_passengers = 0;
-  auto current_invalid = false;
 
-  auto const finish_journey = [&]() {
-    if (current_id) {
-      if (!current_invalid) {
-        ++journey_count;
-        auto const id =
-            static_cast<std::uint64_t>(data.graph_.passenger_groups_.size());
-        data.graph_.passenger_groups_.emplace_back(
-            std::make_unique<passenger_group>(
-                passenger_group{current_journey, current_passengers, id,
-                                data_source{current_id.value().first,
-                                            current_id.value().second}}));
-      } else {
-        ++error_count;
+  auto const add_journey = [&](std::size_t start_idx, std::size_t end_idx,
+                               group_source_flags source_flags) {
+    if (start_idx == end_idx) {
+      return;
+    }
+    auto const source =
+        data_source{current_id.value().first, current_id.value().second};
+    auto const inexact_time = std::any_of(
+        std::next(begin(current_input_legs), start_idx),
+        std::next(begin(current_input_legs), end_idx),
+        [](auto const& leg) { return !leg.trp_candidate_.is_perfect_match(); });
+    if (inexact_time) {
+      source_flags |= group_source_flags::MATCH_INEXACT_TIME;
+      ++journeys_with_inexact_matches;
+    }
+    auto const all_trips_found =
+        std::all_of(std::next(begin(current_input_legs), start_idx),
+                    std::next(begin(current_input_legs), end_idx),
+                    [](auto const& leg) { return leg.trip_found(); });
+
+    auto const missing_transfer_infos = std::any_of(
+        std::next(begin(current_input_legs), start_idx + 1),
+        std::next(begin(current_input_legs), end_idx),
+        [](auto const& leg) { return !leg.enter_transfer_.has_value(); });
+
+    auto invalid_transfer_times = false;
+    if (!missing_transfer_infos) {
+      for (auto const& [l1, l2] :
+           utl::nwise_range<2, decltype(begin(current_input_legs))>{
+               std::next(begin(current_input_legs), start_idx),
+               std::next(begin(current_input_legs), end_idx)}) {
+        if (l2.enter_time_ < l1.exit_time_ ||
+            (l2.enter_time_ - l1.exit_time_) < l2.enter_transfer_->duration_) {
+          invalid_transfer_times = true;
+        }
       }
     }
-    current_journey = {};
-    current_invalid = false;
+
+    if (all_trips_found && !missing_transfer_infos && !invalid_transfer_times) {
+      ++result.loaded_journeys_;
+      auto const id =
+          static_cast<std::uint64_t>(data.graph_.passenger_groups_.size());
+      auto current_journey = compact_journey{};
+      current_journey.legs_ =
+          utl::to_vec(std::next(begin(current_input_legs), start_idx),
+                      std::next(begin(current_input_legs), end_idx),
+                      [&](auto const& leg) { return leg.to_journey_leg(); });
+      utl::verify(!current_journey.legs_.empty(), "empty csv journey");
+      current_journey.legs_.front().enter_transfer_ = {};
+      auto const planned_arrival_time = current_journey.legs_.back().exit_time_;
+      data.graph_.passenger_groups_.emplace_back(
+          data.graph_.passenger_group_allocator_.create(
+              passenger_group{current_journey, id, source, current_passengers,
+                              planned_arrival_time, source_flags}));
+    } else {
+      if (!all_trips_found) {
+        ++journeys_with_missing_trips;
+      }
+      if (missing_transfer_infos) {
+        ++journeys_with_missing_transfers;
+      }
+      if (invalid_transfer_times) {
+        ++journeys_with_invalid_transfer_times;
+      }
+      auto const& first_leg = current_input_legs.at(start_idx);
+      auto const& last_leg = current_input_legs.at(end_idx - 1);
+      result.unmatched_journeys_.emplace_back(unmatched_journey{
+          first_leg.from_station_idx_.value(), last_leg.to_station_idx_.value(),
+          first_leg.enter_time_, source, current_passengers});
+    }
+  };
+
+  auto const finish_journey = [&]() {
+    if (!current_id || current_input_legs.empty()) {
+      return;
+    }
+    auto source_flags = group_source_flags::NONE;
+    auto const possible_leg_count =
+        std::count_if(begin(current_input_legs), end(current_input_legs),
+                      [](auto const& leg) {
+                        return leg.stations_found() && leg.valid_times();
+                      });
+    if (possible_leg_count == 0) {
+      ++journeys_with_no_valid_legs;
+      return;
+    } else if (possible_leg_count < current_input_legs.size()) {
+      ++journeys_with_invalid_legs;
+      source_flags |= group_source_flags::MATCH_JOURNEY_SUBSET;
+    }
+
+    auto subset_start = 0ULL;
+    for (auto i = 0ULL; i < current_input_legs.size(); ++i) {
+      auto const& leg = current_input_legs[i];
+      if (!leg.stations_found() || !leg.valid_times()) {
+        add_journey(subset_start, i, source_flags);
+        subset_start = i + 1;
+      }
+    }
+    add_journey(subset_start, current_input_legs.size(), source_flags);
   };
 
   utl::line_range<utl::buf_reader>{file_content}  //
@@ -314,84 +452,46 @@ std::size_t load_journeys(schedule const& sched, paxmon_data& data,
           finish_journey();
           current_id = id;
           current_passengers = row.passengers_.val();
+          current_input_legs.clear();
         }
         if (row.leg_type_.val() == "FOOT") {
           return;
         }
-        auto const from_station_idx =
-            get_station_idx(sched, row.from_.val().view());
-        auto const to_station_idx =
-            get_station_idx(sched, row.to_.val().view());
-        auto const enter_time =
+        auto& leg = current_input_legs.emplace_back();
+        leg.from_station_idx_ = get_station_idx(sched, row.from_.val().view());
+        leg.to_station_idx_ = get_station_idx(sched, row.to_.val().view());
+        leg.enter_time_ =
             unix_to_motistime(sched.schedule_begin_, row.enter_.val());
-        auto const exit_time =
+        leg.exit_time_ =
             unix_to_motistime(sched.schedule_begin_, row.exit_.val());
-        if (!from_station_idx || !to_station_idx) {
-          current_invalid = true;
-          ++station_not_found_count;
-          if (!from_station_idx && match_log) {
-            fmt::print(match_log, "[{}] Station not found: {}\n", current_id,
-                       row.from_.val().view());
-          }
-          if (!to_station_idx && match_log) {
-            fmt::print(match_log, "[{}] Station not found: {}\n", current_id,
-                       row.to_.val().view());
-          }
-          return;
-        }
-        if (enter_time == INVALID_TIME || exit_time == INVALID_TIME) {
-          current_invalid = true;
-          ++invalid_timestamp_count;
-          if (enter_time == INVALID_TIME && match_log) {
-            fmt::print(match_log, "[{}] Invalid enter timestamp: {}\n",
-                       current_id, format_unix_time(row.enter_.val()));
-          }
-          if (exit_time == INVALID_TIME && match_log) {
-            fmt::print(match_log, "[{}] Invalid exit timestamp: {}\n",
-                       current_id, format_unix_time(row.exit_.val()));
-          }
-          return;
-        }
-        auto const trp = find_trip(
-            sched, from_station_idx.value(), to_station_idx.value(), enter_time,
-            exit_time, row.train_nr_.val(), match_tolerance);
-        if (trp == nullptr) {
-          current_invalid = true;
-          ++trip_not_found_count;
 
-          if (match_log) {
-            fmt::print(match_log,
-                       "[{}] Trip not found: from={:7}, to={:7}, enter={}, "
-                       "exit={}, train_nr={:6}, category={:6}, leg={}\n",
-                       current_id, row.from_.val().view(), row.to_.val().view(),
-                       format_unix_time(row.enter_.val()),
-                       format_unix_time(row.exit_.val()), row.train_nr_.val(),
-                       row.category_.val().view(),
-                       current_journey.legs_.size());
-            debug_trip_match(sched, from_station_idx.value(),
-                             to_station_idx.value(), enter_time, exit_time,
-                             row.train_nr_.val(), row.category_.val().view(),
-                             match_log, debug_match_tolerance);
-          }
-          return;
+        if (leg.stations_found() && leg.valid_times()) {
+          leg.trp_candidate_ = get_best_trip_candidate(
+              sched, leg.from_station_idx_.value(), leg.to_station_idx_.value(),
+              leg.enter_time_, leg.exit_time_, row.train_nr_.val(),
+              match_tolerance);
+          leg.enter_transfer_ = get_transfer_info(
+              sched, current_input_legs, leg.from_station_idx_.value());
         }
-        auto enter_transfer = get_transfer_info(
-            sched, current_journey, from_station_idx.value(), enter_time);
-        current_journey.legs_.emplace_back(journey_leg{
-            to_extern_trip(sched, trp), from_station_idx.value(),
-            to_station_idx.value(), enter_time, exit_time, enter_transfer});
+        write_match_log(match_log, sched, leg, current_id, row,
+                        current_input_legs, debug_match_tolerance);
       });
 
   finish_journey();
 
-  if (error_count > 0) {
-    LOG(warn) << "could not load " << error_count << " journeys";
-    LOG(warn) << station_not_found_count << " stations not found";
-    LOG(warn) << trip_not_found_count << " trips not found";
-    LOG(warn) << invalid_timestamp_count << " invalid timestamps";
-  }
+  LOG(info) << "loaded " << result.loaded_journeys_ << " journeys";
+  LOG(info) << journeys_with_invalid_legs << " journeys with some invalid legs";
+  LOG(info) << journeys_with_no_valid_legs << " journeys with no valid legs";
+  LOG(info) << journeys_with_inexact_matches
+            << " journeys with inexact matches";
+  LOG(info) << journeys_with_missing_trips << " journeys with missing trips";
+  LOG(info) << journeys_with_missing_transfers
+            << " journeys with missing transfers";
+  LOG(info) << journeys_with_invalid_transfer_times
+            << " journeys with invalid transfer times";
+  LOG(info) << result.unmatched_journeys_.size() << " unmatched journeys";
 
-  return journey_count;
+  return result;
 }
 
 }  // namespace motis::paxmon::loader::csv

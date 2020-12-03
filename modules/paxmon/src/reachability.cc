@@ -8,7 +8,6 @@
 namespace motis::paxmon {
 
 reachability_info get_reachability(paxmon_data const& data,
-                                   schedule const& sched,
                                    compact_journey const& j) {
   utl::verify(!j.legs_.empty(), "empty journey");
 
@@ -35,14 +34,16 @@ reachability_info get_reachability(paxmon_data const& data,
           if (leg.enter_transfer_) {
             required_arrival_time_at_station -= leg.enter_transfer_->duration_;
           }
-          if (station_arrival_time > required_arrival_time_at_station) {
+          if (station_arrival_time > required_arrival_time_at_station ||
+              from->is_canceled()) {
             ok = false;
             break;
           }
           in_trip = true;
-          reachability.reachable_trips_.emplace_back(reachable_trip{
-              get_trip(sched, leg.trip_), td, &leg, from->current_time(),
-              INVALID_TIME, edge_idx, reachable_trip::INVALID_INDEX});
+          reachability.reachable_trips_.emplace_back(
+              reachable_trip{leg.trip_, td, &leg, from->schedule_time(),
+                             INVALID_TIME, from->current_time(), INVALID_TIME,
+                             edge_idx, reachable_trip::INVALID_INDEX});
           entry_ok = true;
         }
       }
@@ -54,9 +55,14 @@ reachability_info get_reachability(paxmon_data const& data,
         }
         if (to->station_idx() == leg.exit_station_id_ &&
             to->schedule_time() == leg.exit_time_) {
+          if (to->is_canceled()) {
+            ok = false;
+            break;
+          }
           station_arrival_time = to->current_time();
           auto& rt = reachability.reachable_trips_.back();
           rt.exit_real_time_ = station_arrival_time;
+          rt.exit_schedule_time_ = to->schedule_time();
           rt.exit_edge_idx_ = edge_idx;
           reachability.reachable_interchange_stations_.emplace_back(
               reachable_station{to->station_, to->schedule_time_,

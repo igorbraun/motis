@@ -7,6 +7,7 @@
 #include "utl/verify.h"
 
 #include "motis/core/access/station_access.h"
+#include "motis/core/access/trip_access.h"
 #include "motis/core/conv/station_conv.h"
 #include "motis/core/conv/trip_conv.h"
 
@@ -44,7 +45,7 @@ std::optional<transfer_info> from_fbs(TransferInfo const* ti) {
 Offset<CompactJourneyLeg> to_fbs(schedule const& sched, FlatBufferBuilder& fbb,
                                  journey_leg const& leg) {
   return CreateCompactJourneyLeg(
-      fbb, to_fbs(fbb, leg.trip_),
+      fbb, to_fbs(fbb, to_extern_trip(sched, leg.trip_)),
       to_fbs(fbb, *sched.stations_[leg.enter_station_id_]),
       to_fbs(fbb, *sched.stations_[leg.exit_station_id_]),
       motis_to_unixtime(sched, leg.enter_time_),
@@ -53,7 +54,7 @@ Offset<CompactJourneyLeg> to_fbs(schedule const& sched, FlatBufferBuilder& fbb,
 }
 
 journey_leg from_fbs(schedule const& sched, CompactJourneyLeg const* leg) {
-  return {to_extern_trip(leg->trip()),
+  return {get_trip(sched, to_extern_trip(leg->trip())),
           get_station(sched, leg->enter_station()->id()->str())->index_,
           get_station(sched, leg->exit_station()->id()->str())->index_,
           unix_to_motistime(sched, leg->enter_time()),
@@ -84,22 +85,45 @@ data_source from_fbs(DataSource const* ds) {
 
 Offset<PassengerGroup> to_fbs(schedule const& sched, FlatBufferBuilder& fbb,
                               passenger_group const& pg) {
-  return CreatePassengerGroup(fbb, pg.id_, to_fbs(fbb, pg.source_),
-                              pg.passengers_,
-                              to_fbs(sched, fbb, pg.compact_planned_journey_));
+  return CreatePassengerGroup(
+      fbb, pg.id_, to_fbs(fbb, pg.source_), pg.passengers_,
+      to_fbs(sched, fbb, pg.compact_planned_journey_), pg.probability_,
+      pg.planned_arrival_time_ != INVALID_TIME
+          ? motis_to_unixtime(sched, pg.planned_arrival_time_)
+          : 0,
+      static_cast<std::underlying_type_t<group_source_flags>>(
+          pg.source_flags_));
+}
+
+passenger_group from_fbs(schedule const& sched, PassengerGroup const* pg) {
+  return passenger_group{
+      from_fbs(sched, pg->planned_journey()),
+      pg->id(),
+      from_fbs(pg->source()),
+      static_cast<std::uint16_t>(pg->passenger_count()),
+      pg->planned_arrival_time() != 0
+          ? unix_to_motistime(sched.schedule_begin_, pg->planned_arrival_time())
+          : INVALID_TIME,
+      static_cast<group_source_flags>(pg->source_flags()),
+      true,
+      pg->probability()};
 }
 
 Offset<void> to_fbs(schedule const& sched, FlatBufferBuilder& fbb,
                     passenger_localization const& loc) {
   if (loc.in_trip()) {
-    return CreatePassengerInTrip(fbb, to_fbs(sched, fbb, loc.in_trip_),
-                                 to_fbs(fbb, *loc.at_station_),
-                                 motis_to_unixtime(sched, loc.arrival_time_))
+    return CreatePassengerInTrip(
+               fbb, to_fbs(sched, fbb, loc.in_trip_),
+               to_fbs(fbb, *loc.at_station_),
+               motis_to_unixtime(sched, loc.schedule_arrival_time_),
+               motis_to_unixtime(sched, loc.current_arrival_time_))
         .Union();
   } else {
-    return CreatePassengerAtStation(fbb, to_fbs(fbb, *loc.at_station_),
-                                    motis_to_unixtime(sched, loc.arrival_time_),
-                                    loc.first_station_)
+    return CreatePassengerAtStation(
+               fbb, to_fbs(fbb, *loc.at_station_),
+               motis_to_unixtime(sched, loc.schedule_arrival_time_),
+               motis_to_unixtime(sched, loc.current_arrival_time_),
+               loc.first_station_)
         .Union();
   }
 }
@@ -112,12 +136,14 @@ passenger_localization from_fbs(schedule const& sched,
       auto const loc = reinterpret_cast<PassengerInTrip const*>(loc_ptr);
       return {from_fbs(sched, loc->trip()),
               get_station(sched, loc->next_station()->id()->str()),
-              unix_to_motistime(sched, loc->arrival_time()), false};
+              unix_to_motistime(sched, loc->schedule_arrival_time()),
+              unix_to_motistime(sched, loc->current_arrival_time()), false};
     }
     case PassengerLocalization_PassengerAtStation: {
       auto const loc = reinterpret_cast<PassengerAtStation const*>(loc_ptr);
       return {nullptr, get_station(sched, loc->station()->id()->str()),
-              unix_to_motistime(sched, loc->arrival_time()),
+              unix_to_motistime(sched, loc->schedule_arrival_time()),
+              unix_to_motistime(sched, loc->current_arrival_time()),
               loc->first_station()};
     }
     default:

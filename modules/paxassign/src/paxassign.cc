@@ -89,10 +89,6 @@ uint32_t find_edge_idx(trip_data const* td,
   }
 }
 
-inline duration get_transfer_duration(std::optional<transfer_info> const& ti) {
-  return ti.has_value() ? ti.value().duration_ : 0;
-}
-
 void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   auto const& sched = get_schedule();
   auto& data = *get_shared_data<paxmon_data*>(motis::paxmon::DATA_KEY);
@@ -106,25 +102,26 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<unsigned, std::vector<combined_passenger_group>> combined_groups;
 
   for (auto const& event : *mon_update->events()) {
-    if (event->type() == MonitoringEventType_NO_PROBLEM) {
+    if (event->type() == MonitoringEventType_NO_PROBLEM ||
+        event->type() == MonitoringEventType_MAJOR_DELAY_EXPECTED) {
       continue;
     }
-    auto const& pg = data.get_passenger_group(event->group()->id());
+    auto const pg = data.get_passenger_group(event->group()->id());
     auto const localization =
         from_fbs(sched, event->localization_type(), event->localization());
     auto const destination_station_id =
-        pg.compact_planned_journey_.destination_station_id();
+        pg->compact_planned_journey_.destination_station_id();
 
     auto& destination_groups = combined_groups[destination_station_id];
     auto cpg = std::find_if(
-        begin(destination_groups), end(destination_groups),
+        std::begin(destination_groups), std::end(destination_groups),
         [&](auto const& g) { return g.localization_ == localization; });
     if (cpg == end(destination_groups)) {
       destination_groups.emplace_back(combined_passenger_group{
-          destination_station_id, pg.passengers_, localization, {&pg}, {}});
+          destination_station_id, pg->passengers_, localization, {pg}, {}});
     } else {
-      cpg->passengers_ += pg.passengers_;
-      cpg->groups_.push_back(&pg);
+      cpg->passengers_ += pg->passengers_;
+      cpg->groups_.push_back(pg);
     }
   }
 
@@ -137,45 +134,10 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   heuristic_assignments(combined_groups, data, sched);
 }
 
-void remove_psgs_from_edges(
-    std::map<unsigned, std::vector<combined_passenger_group>>&
-        combined_groups) {
-  scoped_timer withdraw_pg_assignments{"withdraw pg assignments"};
-  for (auto const& same_dest_gr : combined_groups) {
-    for (auto const& cpg : same_dest_gr.second) {
-      for (auto const& g : cpg.groups_) {
-        for (auto& e : g->edges_) {
-          if (e->passengers_ < g->passengers_) {
-            throw std::runtime_error("edge psgs less than group psgs");
-          }
-          e->passengers_ -= g->passengers_;
-        }
-      }
-    }
-  }
-}
-
-void add_psgs_to_edges(
-    std::map<unsigned, std::vector<combined_passenger_group>>&
-        combined_groups) {
-  scoped_timer pg_assignments{"assign psgs back to edges"};
-  for (auto const& same_dest_gr : combined_groups) {
-    for (auto const& cpg : same_dest_gr.second) {
-      for (auto const& g : cpg.groups_) {
-        for (auto& e : g->edges_) {
-          e->passengers_ += g->passengers_;
-        }
-      }
-    }
-  }
-}
 
 void paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
-
-  remove_psgs_from_edges(combined_groups);
-
   auto routing_requests = 0ULL;
   auto alternatives_found = 0ULL;
 
@@ -303,7 +265,7 @@ void paxassign::cap_ilp_assignment(
               if (leg_idx == 0 && i == start_edge_idx) {
                 associated_waiting_time +=
                     (td->edges_[i]->from_->current_time() -
-                     cpg.localization_.arrival_time_);
+                     cpg.localization_.current_arrival_time_);
               }
 
               if (cap_edges.find(td->edges_[i]) == cap_edges.end()) {
@@ -315,7 +277,7 @@ void paxassign::cap_ilp_assignment(
                     static_cast<uint64_t>(
                         td->edges_[i]->capacity() *
                         perc_tt_config.cost_function_capacity_steps_.back()),
-                    td->edges_[i]->passengers_,
+                    td->edges_[i]->passengers(),
                     edge_type::TRIP};
               }
               curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
@@ -337,7 +299,7 @@ void paxassign::cap_ilp_assignment(
                               oe->capacity() *
                               perc_tt_config.cost_function_capacity_steps_
                                   .back()),
-                          oe->passengers_,
+                          oe->passengers(),
                           edge_type::WAIT};
                     }
                     curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
@@ -435,7 +397,6 @@ void paxassign::cap_ilp_assignment(
   }
 */
   // throw std::runtime_error("time expanded graph is built");
-  add_psgs_to_edges(combined_groups);
 
   /* TODO: for future evaluation
   std::ofstream stats_file;
@@ -481,7 +442,6 @@ void paxassign::cap_ilp_assignment(
 void paxassign::node_arc_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
-  remove_psgs_from_edges(combined_groups);
 
   node_arc_config config{1.2, 30, 6, 10000};
   auto te_graph = build_time_expanded_graph(data, sched, config);
@@ -503,14 +463,11 @@ void paxassign::node_arc_ilp_assignment(
     remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
   }
   // throw std::runtime_error("time expanded graph is built");
-
-  add_psgs_to_edges(combined_groups);
 }
 
 void paxassign::heuristic_assignments(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
-  remove_psgs_from_edges(combined_groups);
 
   perceived_tt_config perc_tt_config;
   node_arc_config eg_config{1.2, 30, 6, 10000};
@@ -592,10 +549,11 @@ void paxassign::heuristic_assignments(
   }
 
   throw std::runtime_error("heuristic algorithms finished");
-  add_psgs_to_edges(combined_groups);
 }
 
 void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
+
+  /*
   auto const& sched = get_sched();
   auto& data = *get_shared_data<paxmon_data*>(motis::paxmon::DATA_KEY);
 
@@ -632,6 +590,6 @@ void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
   }
 
   // auto psg_assignment = build_ILP_from_scenario_API(psg_groups, config, "1");
+*/
 }
-
 }  // namespace motis::paxassign

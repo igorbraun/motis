@@ -15,19 +15,27 @@ using namespace motis::logging;
 
 namespace motis::paxmon::loader::journeys {
 
-std::size_t load_journeys(schedule const& sched, paxmon_data& data,
-                          std::string const& journey_file) {
-  std::size_t journey_count = 0;
+void load_journey(schedule const& sched, paxmon_data& data, journey const& j,
+                  data_source const& source, std::uint16_t passengers,
+                  group_source_flags source_flags) {
+  auto const id =
+      static_cast<std::uint64_t>(data.graph_.passenger_groups_.size());
+  auto const planned_arrival_time = unix_to_motistime(
+      sched.schedule_begin_, j.stops_.back().arrival_.schedule_timestamp_);
+  data.graph_.passenger_groups_.emplace_back(
+      data.graph_.passenger_group_allocator_.create(
+          passenger_group{to_compact_journey(j, sched), id, source, passengers,
+                          planned_arrival_time, source_flags, true}));
+}
+
+loader_result load_journeys(schedule const& sched, paxmon_data& data,
+                            std::string const& journey_file) {
+  auto result = loader_result{};
 
   auto add_journey = [&](journey const& j, std::uint64_t primary_ref = 0,
                          std::uint64_t secondary_ref = 0) {
-    auto const id =
-        static_cast<std::uint64_t>(data.graph_.passenger_groups_.size());
-    data.graph_.passenger_groups_.emplace_back(
-        std::make_unique<passenger_group>(
-            passenger_group{to_compact_journey(j, sched), 1, id,
-                            data_source{primary_ref, secondary_ref}}));
-    ++journey_count;
+    load_journey(sched, data, j, data_source{primary_ref, secondary_ref}, 1);
+    ++result.loaded_journeys_;
   };
 
   auto line_nr = 0ULL;
@@ -59,7 +67,7 @@ std::size_t load_journeys(schedule const& sched, paxmon_data& data,
     }
   });
 
-  return journey_count;
+  return result;
 }
 
 }  // namespace motis::paxmon::loader::journeys

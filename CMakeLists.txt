@@ -30,6 +30,7 @@ endif()
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 option(MOTIS_AVX "enable AVX functions" ON)
+option(MOTIS_AVX2 "enable AVX2 + FMA functions" ON)
 
 option(MOTIS_CUDA "enable CUDA functions" OFF)
 if (MOTIS_CUDA)
@@ -143,6 +144,14 @@ if (MOTIS_AVX)
     set(MOTIS_CXX_FLAGS ${MOTIS_CXX_FLAGS} -mavx)
   endif()
 endif()
+if (MOTIS_AVX2)
+  set(MOTIS_COMPILE_DEFINITIONS MOTIS_AVX2 ${MOTIS_COMPILE_DEFINITIONS})
+  if (MSVC)
+    set(MOTIS_CXX_FLAGS ${MOTIS_CXX_FLAGS} /arch:AVX2)
+  else()
+    set(MOTIS_CXX_FLAGS ${MOTIS_CXX_FLAGS} -mavx2 -mfma)
+  endif()
+endif()
 
 
 ################################
@@ -230,7 +239,7 @@ target_link_libraries(motis-test
   ianatzdb-res
   ${Boost_LIBRARIES}
 )
-target_link_libraries(motis-test gtest gtest_main)
+target_link_libraries(motis-test gtest gtest_main gmock)
 
 
 ################################
@@ -263,7 +272,7 @@ target_link_libraries(motis-itest
   ianatzdb-res
   ${Boost_LIBRARIES}
 )
-target_link_libraries(motis-itest gtest gtest_main)
+target_link_libraries(motis-itest gtest gtest_main gmock)
 set_target_properties(motis-itest PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS "--gtest_filter=\"ris_gtfsrt_cancel_message_itest_t0.before_cancel\"")
 
 

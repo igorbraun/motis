@@ -3,35 +3,58 @@ include "paxmon/PassengerLocalization.fbs";
 
 namespace motis.paxforecast;
 
+table ForecastAlternative {
+  journey: motis.paxmon.CompactJourney;
+  probability: float;
+}
+
 table PassengerGroupForecast {
   group: motis.paxmon.PassengerGroup;
   localization: motis.paxmon.PassengerLocalization;
-  forecast_journey: motis.paxmon.CompactJourney;
+  forecast_alternatives: [ForecastAlternative];
 }
 
-table EdgeOverCapacity {
+struct CdfEntry {
   passengers: uint;
-  capacity: uint;
-  additional: uint;
+  probability: float;
+}
+
+enum CapacityType : byte { Known, Unknown, Unlimited }
+
+table ServiceInfo {
+  name: string;
+  category: string;
+  train_nr: uint;
+  line: string;
+  provider: string;
+  clasz: ubyte;
+}
+
+table EdgeForecast {
   from: motis.Station;
   to: motis.Station;
   departure_schedule_time: ulong;
+  departure_current_time: ulong;
   arrival_schedule_time: ulong;
+  arrival_current_time: ulong;
+  capacity_type: CapacityType;
+  capacity: uint;
+  passenger_cdf: [CdfEntry];
+  updated: bool;
+  possibly_over_capacity: bool;
+  expected_passengers: uint;
 }
 
-table TripOverCapacity {
+table TripForecast {
   trip: motis.TripId;
-  edges: [EdgeOverCapacity];
-}
-
-table PassengerForecastResult {
-  over_capacity: bool;
-  edge_count_over_capacity: ulong;
-  total_passenger_over_capacity: ulong;
-  trips_over_capacity: [TripOverCapacity];
+  primary_station: motis.Station;
+  secondary_station: motis.Station;
+  service_infos: [ServiceInfo];
+  edges: [EdgeForecast];
 }
 
 table PassengerForecast {
+  system_time: ulong;
   groups: [PassengerGroupForecast];
-  sim_result: PassengerForecastResult;
+  trips: [TripForecast];
 }

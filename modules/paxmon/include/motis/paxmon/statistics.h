@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "motis/core/schedule/schedule.h"
+
 namespace motis::paxmon {
 
 struct system_statistics {
@@ -54,6 +56,14 @@ struct tick_statistics {
   // tracking
   std::uint64_t tracked_ok_groups_{};
   std::uint64_t tracked_broken_groups_{};
+
+  // timing (ms)
+  std::uint64_t t_reachability_{};
+  std::uint64_t t_localization_{};
+  std::uint64_t t_update_load_{};
+  std::uint64_t t_fbs_events_{};
+  std::uint64_t t_publish_{};
+  std::uint64_t t_rt_updates_applied_total_{};
 };
 
 struct graph_statistics {
@@ -65,6 +75,7 @@ struct graph_statistics {
   std::uint64_t trip_edges_{};
   std::uint64_t interchange_edges_{};
   std::uint64_t wait_edges_{};
+  std::uint64_t through_edges_{};
   std::uint64_t canceled_edges_{};
   std::uint64_t broken_edges_{};
   std::uint64_t trips_{};
@@ -76,6 +87,7 @@ struct graph_statistics {
 
 struct paxmon_data;
 
-graph_statistics calc_graph_statistics(paxmon_data const& data);
+graph_statistics calc_graph_statistics(schedule const& sched,
+                                       paxmon_data const& data);
 
 }  // namespace motis::paxmon

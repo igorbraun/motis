@@ -16,6 +16,8 @@ struct dataset_settings : public conf::configuration,
                           public motis::loader::loader_options {
   dataset_settings() : configuration("Dataset Settings", "dataset") {
     param(dataset_, "path", "MOTIS Dataset root");
+    param(dataset_prefix_, "prefix",
+          "station id prefixes (one per path or empty).");
     param(graph_path_, "graph_path",
           "path to read&write the serialized graph from/to "
           "(\"default\": generated from settings)");
@@ -38,6 +40,8 @@ struct dataset_settings : public conf::configuration,
     param(wzr_classes_path_, "wzr_classes_path",
           "waiting time rules class mapping");
     param(wzr_matrix_path_, "wzr_matrix_path", "waiting time matrix");
+    param(no_local_transport_, "no_local_transport",
+          "don't load local transport");
   }
 };
 

@@ -6,15 +6,20 @@
 #include <unordered_map>
 #include <vector>
 
+#include "motis/data.h"
 #include "motis/hash_map.h"
+#include "motis/vector.h"
 
 #include "motis/core/schedule/event_type.h"
 #include "motis/core/schedule/schedule.h"
 #include "motis/core/schedule/time.h"
 #include "motis/core/schedule/trip.h"
+#include "motis/core/schedule/trip_idx.h"
 #include "motis/core/journey/extern_trip.h"
 
+#include "motis/paxmon/allocator.h"
 #include "motis/paxmon/capacity_data.h"
+#include "motis/paxmon/get_load.h"
 #include "motis/paxmon/passenger_group.h"
 #include "motis/paxmon/pax_connection_info.h"
 
@@ -54,51 +59,82 @@ struct event_node {
   std::vector<edge*> in_edges_;
 };
 
-enum class edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT };
+enum class edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT, THROUGH };
 
 inline std::ostream& operator<<(std::ostream& out, edge_type const et) {
   switch (et) {
     case edge_type::TRIP: return out << "TRIP";
     case edge_type::INTERCHANGE: return out << "INTERCHANGE";
     case edge_type::WAIT: return out << "WAIT";
+    case edge_type::THROUGH: return out << "THROUGH";
   }
   return out;
+}
+
+inline std::uint16_t get_base_load_monitoring_local(
+    pax_connection_info const& pci) {
+  std::uint16_t load = 0;
+  for (auto const grp : pci.groups_) {
+    if (grp->probability_ == 1.0F) {
+      load += grp->passengers_;
+    }
+  }
+  return load;
 }
 
 struct edge {
   inline bool is_valid(graph const& g) const {
     return from(g)->is_valid() && to(g)->is_valid();
   }
+
   inline bool is_canceled(graph const& g) const {
     return from(g)->is_canceled() || to(g)->is_canceled();
   }
-  inline bool is_trip() const { return type() != edge_type::INTERCHANGE; }
+
+  inline bool is_trip() const { return type() == edge_type::TRIP; }
+
   inline bool is_interchange() const {
     return type() == edge_type::INTERCHANGE;
   }
 
-  inline std::uint16_t passengers_over_capacity() const {
-    auto const pax = passengers();
-    auto const cap = capacity();
-    return pax > cap ? pax - cap : 0U;
-  }
+  inline bool is_wait() const { return type() == edge_type::WAIT; }
 
   inline event_node* from(graph const&) const { return from_; }
   inline event_node* to(graph const&) const { return to_; }
 
   inline edge_type type() const { return type_; }
-  inline trip const* get_trip() const { return trip_; }
+
+  inline merged_trips_idx get_merged_trips_idx() const { return trips_; }
+
+  inline mcd::vector<ptr<trip>> const& get_trips(schedule const& sched) const {
+    return *sched.merged_trips_.at(trips_);
+  }
+
   inline duration transfer_time() const { return transfer_time_; }
 
-  inline std::uint64_t capacity() const {
+  inline std::uint16_t capacity() const {
     return get_capacity(encoded_capacity_);
   }
 
-  inline capacity_source capacity_source() const {
-    return get_capacity_source(encoded_capacity_);
+  inline capacity_source get_capacity_source() const {
+    return ::motis::paxmon::get_capacity_source(encoded_capacity_);
   }
 
-  inline std::uint64_t passengers() const { return passengers_; }
+  inline bool has_unlimited_capacity() const {
+    return encoded_capacity_ == UNLIMITED_ENCODED_CAPACITY;
+  }
+
+  inline bool has_unknown_capacity() const {
+    return encoded_capacity_ == UNKNOWN_ENCODED_CAPACITY;
+  }
+
+  inline bool has_capacity() const {
+    return !has_unknown_capacity() && !has_unlimited_capacity();
+  }
+
+  inline std::uint64_t passengers() const {
+    return get_base_load_monitoring_local(pax_connection_info_);
+  }
 
   inline bool is_broken() const { return broken_; }
 
@@ -112,9 +148,9 @@ struct edge {
   bool broken_{false};
   duration transfer_time_{};
   std::uint16_t encoded_capacity_{};
-  std::uint16_t passengers_{};
-  struct trip const* trip_{};
-  struct pax_connection_info pax_connection_info_;
+  service_class clasz_{service_class::OTHER};
+  merged_trips_idx trips_{};
+  pax_connection_info pax_connection_info_;
 };
 
 struct trip_data {
@@ -125,8 +161,9 @@ struct trip_data {
 
 struct graph {
   std::vector<std::unique_ptr<event_node>> nodes_;
-  mcd::hash_map<extern_trip, std::unique_ptr<trip_data>> trip_data_;
-  std::vector<std::unique_ptr<passenger_group>> passenger_groups_;
+  mcd::hash_map<trip const*, std::unique_ptr<trip_data>> trip_data_;
+  std::vector<passenger_group*> passenger_groups_;
+  allocator<passenger_group> passenger_group_allocator_;
 };
 
 }  // namespace motis::paxmon
