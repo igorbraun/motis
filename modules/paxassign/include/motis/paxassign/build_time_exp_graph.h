@@ -165,9 +165,9 @@ std::vector<eg_event_node*> create_wait_nodes(
     for (auto& n : ttn.second) {
       (n->type_ == eg_event_type::DEP)
           ? graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-                wait_node, n, eg_edge_type::TRAIN_ENTRY, 0)))
+                wait_node, n, eg_edge_type::TRAIN_ENTRY, transfer_cost)))
           : graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-                n, wait_node, eg_edge_type::TRAIN_EXIT, transfer_cost)));
+                n, wait_node, eg_edge_type::TRAIN_EXIT, 0)));
     }
     wait_nodes.push_back(wait_node);
   }

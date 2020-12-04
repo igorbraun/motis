@@ -134,7 +134,6 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   heuristic_assignments(combined_groups, data, sched);
 }
 
-
 void paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
@@ -211,6 +210,8 @@ void paxassign::cap_ilp_assignment(
           for (auto const& leg : alt.compact_journey_.legs_) {
             auto td = get_or_add_trip(sched, data, leg.trip_);
             if (last_node != nullptr) {
+              // TODO. interchange edge cost here and in the node-arc graph
+              // should be equivalent. Check it
               auto const transfer_time =
                   get_transfer_duration(leg.enter_transfer_);
               auto const inch_e_start_idx = find_edge_idx(td, leg, true);
@@ -252,6 +253,8 @@ void paxassign::cap_ilp_assignment(
         for (auto const& alt : cpg.alternatives_) {
           cap_ILP_connection curr_connection{curr_alt_id++, 0,
                                              std::vector<cap_ILP_edge*>{}};
+          // TODO: check, that waiting time here and in the node-arc graph
+          // (represented through multiple edges) are equivalent
           uint32_t associated_waiting_time = 0;
           for (auto const [leg_idx, leg] :
                utl::enumerate(alt.compact_journey_.legs_)) {
@@ -273,12 +276,13 @@ void paxassign::cap_ilp_assignment(
                     curr_e_id++,
                     static_cast<uint32_t>(td->edges_[i]->to_->current_time() -
                                           td->edges_[i]->from_->current_time()),
+                    // TODO: has capacity check
                     td->edges_[i]->capacity(),
                     static_cast<uint64_t>(
+                        // TODO: has capacity check
                         td->edges_[i]->capacity() *
                         perc_tt_config.cost_function_capacity_steps_.back()),
-                    td->edges_[i]->passengers(),
-                    edge_type::TRIP};
+                    td->edges_[i]->passengers(), edge_type::TRIP};
               }
               curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
 
@@ -294,13 +298,14 @@ void paxassign::cap_ilp_assignment(
                           static_cast<uint32_t>(
                               td->edges_[i + 1]->from_->current_time() -
                               td->edges_[i]->to_->current_time()),
+                          // TODO: has capacity check
                           oe->capacity(),
                           static_cast<uint64_t>(
+                              // TODO: has capacity check
                               oe->capacity() *
                               perc_tt_config.cost_function_capacity_steps_
                                   .back()),
-                          oe->passengers(),
-                          edge_type::WAIT};
+                          oe->passengers(), edge_type::WAIT};
                     }
                     curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
                   }

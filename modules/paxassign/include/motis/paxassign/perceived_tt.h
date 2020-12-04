@@ -79,8 +79,7 @@ double piecewise_linear_convex_perceived_tt(
     std::vector<cap_ILP_psg_group> const& cap_ILP_scenario,
     std::vector<std::pair<ilp_psg_id, alt_idx>> const& assignment,
     perceived_tt_config const& perc_tt_config,
-    std::map<std::string, std::tuple<double, double, double, double>> const&
-        variables_with_values) {
+    std::map<std::string, std::tuple<double, double, double, double>> const&) {
   double result = 0;
   auto assgmts = calculate_assignments_to_edge(cap_ILP_scenario, assignment);
   std::set<cap_ILP_edge*> handled_edges;
