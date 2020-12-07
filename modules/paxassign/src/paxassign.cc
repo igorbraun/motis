@@ -276,13 +276,17 @@ void paxassign::cap_ilp_assignment(
                     curr_e_id++,
                     static_cast<uint32_t>(td->edges_[i]->to_->current_time() -
                                           td->edges_[i]->from_->current_time()),
-                    // TODO: has capacity check
-                    td->edges_[i]->capacity(),
-                    static_cast<uint64_t>(
-                        // TODO: has capacity check
-                        td->edges_[i]->capacity() *
-                        perc_tt_config.cost_function_capacity_steps_.back()),
-                    td->edges_[i]->passengers(), edge_type::TRIP};
+                    td->edges_[i]->has_capacity()
+                        ? td->edges_[i]->capacity()
+                        : std::numeric_limits<std::uint64_t>::max(),
+                    td->edges_[i]->has_capacity()
+                        ? static_cast<uint64_t>(
+                              td->edges_[i]->capacity() *
+                              perc_tt_config.cost_function_capacity_steps_
+                                  .back())
+                        : std::numeric_limits<std::uint64_t>::max(),
+                    td->edges_[i]->passengers(),
+                    edge_type::TRIP};
               }
               curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
 
@@ -298,14 +302,17 @@ void paxassign::cap_ilp_assignment(
                           static_cast<uint32_t>(
                               td->edges_[i + 1]->from_->current_time() -
                               td->edges_[i]->to_->current_time()),
-                          // TODO: has capacity check
-                          oe->capacity(),
-                          static_cast<uint64_t>(
-                              // TODO: has capacity check
-                              oe->capacity() *
-                              perc_tt_config.cost_function_capacity_steps_
-                                  .back()),
-                          oe->passengers(), edge_type::WAIT};
+                          oe->has_capacity()
+                              ? oe->capacity()
+                              : std::numeric_limits<std::uint64_t>::max(),
+                          oe->has_capacity()
+                              ? static_cast<uint64_t>(
+                                    oe->capacity() *
+                                    perc_tt_config.cost_function_capacity_steps_
+                                        .back())
+                              : std::numeric_limits<std::uint64_t>::max(),
+                          oe->passengers(),
+                          edge_type::WAIT};
                     }
                     curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
                   }
