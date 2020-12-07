@@ -382,9 +382,8 @@ void paxassign::cap_ilp_assignment(
                    cap_ILP_scenario, sol.alt_to_use_, perc_tt_config,
                    variables_with_values)
             << std::endl;
-  throw std::runtime_error("time expanded graph is built");
 
-  /*
+
   for (auto& assignment : sol.alt_to_use_) {
     if (cap_ilp_psg_to_cpg[assignment.first]->alternatives_.size() <=
         assignment.second) {
@@ -403,11 +402,11 @@ void paxassign::cap_ilp_assignment(
                 << " with " << cap_ilp_psg_to_cpg[assignment.first]->passengers_
                 << " passengers:" << std::endl;
       for (auto const& leg : cj.legs_) {
-        std::cout << leg.trip_.train_nr_ << std::endl;
+        std::cout << leg.trip_->id_.primary_.train_nr_ << std::endl;
       }
     }
   }
-*/
+
   // throw std::runtime_error("time expanded graph is built");
 
   /* TODO: for future evaluation
@@ -474,7 +473,7 @@ void paxassign::node_arc_ilp_assignment(
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
   }
-  // throw std::runtime_error("time expanded graph is built");
+  throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(

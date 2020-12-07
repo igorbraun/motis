@@ -47,10 +47,10 @@ inline eg_edge make_trip_edge(eg_event_node* from, eg_event_node* to,
 }
 
 inline eg_edge make_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
-                                     eg_edge_type et, uint32_t cost) {
+                                     eg_edge_type type, uint32_t cost) {
   return eg_edge{from,
                  to,
-                 et,
+                 type,
                  cost,
                  std::numeric_limits<std::uint16_t>::max(),
                  std::numeric_limits<std::uint16_t>::max(),
@@ -105,7 +105,7 @@ std::vector<eg_edge*> add_trip(schedule const& sched,
     auto soft_capacity =
         get_edge_overall_capacity(dep_node, arr_node, et, lc, data, sched);
     auto hard_capacity =
-        (std::uint16_t)config.hard_capacity_ratio_ * soft_capacity;
+        static_cast<std::uint16_t>(config.hard_capacity_ratio_ * soft_capacity);
     auto capacity_utilization =
         get_edge_capacity_utilization(dep_node, arr_node, et, data, sched);
     auto edge_psgs = get_edge_psgs(dep_node, arr_node, et, data, sched);
@@ -165,20 +165,19 @@ std::vector<eg_event_node*> create_wait_nodes(
     for (auto& n : ttn.second) {
       (n->type_ == eg_event_type::DEP)
           ? graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-                wait_node, n, eg_edge_type::TRAIN_ENTRY, transfer_cost)))
+                wait_node, n, eg_edge_type::TRAIN_ENTRY, 0)))
           : graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-                n, wait_node, eg_edge_type::TRAIN_EXIT, 0)));
+                n, wait_node, eg_edge_type::TRAIN_EXIT, transfer_cost)));
     }
     wait_nodes.push_back(wait_node);
   }
   return wait_nodes;
 }
 
-std::map<time, std::vector<eg_event_node*>> time_to_dep_arr_nodes(
-    std::vector<eg_event_node*> const& dep_arr_nodes,
-    uint32_t const transfer_cost) {
+std::map<time, std::vector<eg_event_node*>> map_time_to_nodes(
+    std::vector<eg_event_node*> const& nodes, uint32_t const transfer_cost) {
   std::map<time, std::vector<eg_event_node*>> result;
-  for (auto const& n : dep_arr_nodes) {
+  for (auto const& n : nodes) {
     time t = (n->type_ == eg_event_type::DEP)
                  ? n->time_
                  : static_cast<time>(n->time_ + transfer_cost);
@@ -187,9 +186,9 @@ std::map<time, std::vector<eg_event_node*>> time_to_dep_arr_nodes(
   return result;
 }
 
-void build_transfers(std::vector<eg_event_node*> const& dep_arr_nodes,
+void build_transfers(std::vector<eg_event_node*> const& nodes,
                      uint32_t const transfer_cost, time_expanded_graph& g) {
-  auto time_to_nodes = time_to_dep_arr_nodes(dep_arr_nodes, transfer_cost);
+  auto time_to_nodes = map_time_to_nodes(nodes, transfer_cost);
   auto wait_nodes = create_wait_nodes(time_to_nodes, g, transfer_cost);
   connect_wait_nodes(wait_nodes, g);
 }
@@ -227,6 +226,60 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
   return te_graph;
 }
 
+eg_event_node* get_localization_node(combined_passenger_group const& cpg,
+                                     time_expanded_graph& te_graph,
+                                     schedule const& sched) {
+  // CASE I: Passenger in trip
+  if (cpg.localization_.in_trip()) {
+    auto tr_data = te_graph.trip_data_.find(
+        to_extern_trip(sched, cpg.localization_.in_trip_));
+    assert(tr_data != te_graph.trip_data_.end());
+    auto at_edge = std::find_if(
+        std::begin(tr_data->second->edges_), std::end(tr_data->second->edges_),
+        [&cpg](eg_edge* e_ptr) {
+          return e_ptr->to_->station_ ==
+                     cpg.localization_.at_station_->index_ &&
+                 cpg.localization_.current_arrival_time_ == e_ptr->to_->time_;
+        });
+    assert(at_edge != tr_data->second->edges_.end());
+    return (*at_edge)->to_;
+  } else {
+    // TODO: check that this case works well
+    // CASE II: Passenger at station, either before journey or at interchange
+    auto psg_localization_node =
+        te_graph.nodes_
+            .emplace_back(std::make_unique<eg_event_node>(
+                eg_event_node{cpg.localization_.current_arrival_time_,
+                              eg_event_type::WAIT,
+                              cpg.localization_.at_station_->index_,
+                              {},
+                              {},
+                              te_graph.nodes_.size()}))
+            .get();
+
+    std::vector<eg_event_node*> relevant_nodes =
+        utl::all(te_graph.st_to_nodes_[cpg.localization_.at_station_->index_]) |
+        utl::remove_if([&](auto const& n) {
+          return n->type_ != eg_event_type::WAIT ||
+                 n->time_ < cpg.localization_.current_arrival_time_;
+        }) |
+        utl::vec();
+
+    if (relevant_nodes.empty()) {
+      return psg_localization_node;
+    } else {
+      std::sort(std::begin(relevant_nodes), std::end(relevant_nodes),
+                [](eg_event_node const* lhs, eg_event_node const* rhs) {
+                  return lhs->time_ < rhs->time_;
+                });
+      te_graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+          psg_localization_node, relevant_nodes[0], eg_edge_type::WAIT,
+          relevant_nodes[0]->time_ - psg_localization_node->time_)));
+      return psg_localization_node;
+    }
+  }
+}
+
 std::vector<eg_psg_group> add_psgs_to_te_graph(
     std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
     schedule const& sched, node_arc_config const& config,
@@ -236,11 +289,6 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
       eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
-      if (at_ev_node == nullptr) {
-        std::cout << "NO OPTION FOR PASSENGER TO LEAVE FROM STATION"
-                  << std::endl;
-        continue;
-      }
       auto target_node = te_graph.nodes_
                              .emplace_back(std::make_unique<eg_event_node>(
                                  eg_event_node{INVALID_TIME,
