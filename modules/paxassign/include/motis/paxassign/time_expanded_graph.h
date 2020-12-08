@@ -2,6 +2,8 @@
 
 #include <unordered_set>
 
+#include "motis/paxassign/combined_pg.h"
+
 namespace motis::paxassign {
 
 struct eg_edge;
@@ -75,12 +77,10 @@ struct eg_trip_data {
 };
 
 struct eg_psg_group {
-  combined_passenger_group& cpg_;
+  combined_pg& cpg_;
   eg_event_node* from_;
   eg_event_node* to_;
   int psg_count_;
-  // TODO: transfer edges validity to this struct?
-  std::unordered_set<eg_edge*> valid_edges_;
 };
 
 struct time_expanded_graph {

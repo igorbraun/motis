@@ -226,7 +226,7 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
   return te_graph;
 }
 
-eg_event_node* get_localization_node(combined_passenger_group const& cpg,
+eg_event_node* get_localization_node(combined_pg const& cpg,
                                      time_expanded_graph& te_graph,
                                      schedule const& sched) {
   // CASE I: Passenger in trip
@@ -256,6 +256,8 @@ eg_event_node* get_localization_node(combined_passenger_group const& cpg,
                               {},
                               te_graph.nodes_.size()}))
             .get();
+    te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].push_back(
+        psg_localization_node);
 
     std::vector<eg_event_node*> relevant_nodes =
         utl::all(te_graph.st_to_nodes_[cpg.localization_.at_station_->index_]) |
@@ -281,7 +283,7 @@ eg_event_node* get_localization_node(combined_passenger_group const& cpg,
 }
 
 std::vector<eg_psg_group> add_psgs_to_te_graph(
-    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     schedule const& sched, node_arc_config const& config,
     time_expanded_graph& te_graph) {
   std::vector<eg_psg_group> eg_psg_groups;
@@ -298,6 +300,7 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
                                                {},
                                                te_graph.nodes_.size()}))
                              .get();
+      te_graph.st_to_nodes_[cpg.destination_station_id_].push_back(target_node);
       for (auto& n : te_graph.nodes_) {
         if (n.get() != target_node &&
             n->station_ == cpg.destination_station_id_ &&
@@ -309,8 +312,7 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
       motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
                                              eg_edge_type::NO_ROUTE,
                                              config.no_route_cost_, te_graph);
-      eg_psg_groups.push_back({cpg, at_ev_node, target_node, cpg.passengers_,
-                               std::unordered_set<eg_edge*>()});
+      eg_psg_groups.push_back({cpg, at_ev_node, target_node, cpg.passengers_});
     }
   }
   return eg_psg_groups;

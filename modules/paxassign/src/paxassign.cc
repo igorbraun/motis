@@ -42,7 +42,6 @@ using namespace motis::logging;
 using namespace motis::routing;
 using namespace motis::paxmon;
 using namespace motis::rt;
-using namespace motis::paxforecast;
 
 namespace motis::paxassign {
 
@@ -99,7 +98,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
       unix_to_motistime(sched.schedule_begin_, sched.system_time_);
   utl::verify(current_time != INVALID_TIME, "invalid current system time");
 
-  std::map<unsigned, std::vector<combined_passenger_group>> combined_groups;
+  std::map<unsigned, std::vector<combined_pg>> combined_groups;
+  std::uint16_t curr_id = 0;
 
   for (auto const& event : *mon_update->events()) {
     if (event->type() == MonitoringEventType_NO_PROBLEM ||
@@ -117,8 +117,12 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
         std::begin(destination_groups), std::end(destination_groups),
         [&](auto const& g) { return g.localization_ == localization; });
     if (cpg == end(destination_groups)) {
-      destination_groups.emplace_back(combined_passenger_group{
-          destination_station_id, pg->passengers_, localization, {pg}, {}});
+      destination_groups.emplace_back(combined_pg{curr_id++,
+                                                  destination_station_id,
+                                                  pg->passengers_,
+                                                  localization,
+                                                  {pg},
+                                                  {}});
     } else {
       cpg->passengers_ += pg->passengers_;
       cpg->groups_.push_back(pg);
@@ -135,8 +139,13 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
 }
 
 void paxassign::cap_ilp_assignment(
-    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
+  uint16_t psgs_in_sc = 0;
+  for (auto& cgs : combined_groups) {
+    psgs_in_sc += cgs.second.size();
+  }
+
   auto routing_requests = 0ULL;
   auto alternatives_found = 0ULL;
 
@@ -149,7 +158,7 @@ void paxassign::cap_ilp_assignment(
         ++routing_requests;
         futures.emplace_back(
             spawn_job_void([&sched, destination_station_id, &cpg] {
-              cpg.alternatives_ = find_alternatives(
+              cpg.alternatives_ = motis::paxforecast::find_alternatives(
                   sched, destination_station_id, cpg.localization_);
             }));
       }
@@ -157,6 +166,7 @@ void paxassign::cap_ilp_assignment(
     ctx::await_all(futures);
   }
 
+  /*
   {
     scoped_timer no_alt_timer{"remove cpg with no alternatives"};
     // TODO: don't erase them, just set something like no route status
@@ -171,6 +181,7 @@ void paxassign::cap_ilp_assignment(
       }
     }
   }
+  */
 
   {
     scoped_timer alt_trips_timer{"add alternatives to graph"};
@@ -230,7 +241,7 @@ void paxassign::cap_ilp_assignment(
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
 
-  std::map<uint32_t, combined_passenger_group*> cap_ilp_psg_to_cpg;
+  std::map<uint32_t, combined_pg*> cap_ilp_psg_to_cpg;
   uint32_t curr_cpg_id = 1;
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
@@ -383,7 +394,6 @@ void paxassign::cap_ilp_assignment(
                    variables_with_values)
             << std::endl;
 
-
   for (auto& assignment : sol.alt_to_use_) {
     if (cap_ilp_psg_to_cpg[assignment.first]->alternatives_.size() <=
         assignment.second) {
@@ -406,6 +416,9 @@ void paxassign::cap_ilp_assignment(
       }
     }
   }
+
+  std::cout << "HALLE APPROACH. Passengers in scenario INPUT : " << psgs_in_sc
+            << ", OUTPUT assignments : " << sol.alt_to_use_.size() << std::endl;
 
   // throw std::runtime_error("time expanded graph is built");
 
@@ -451,8 +464,12 @@ void paxassign::cap_ilp_assignment(
 }
 
 void paxassign::node_arc_ilp_assignment(
-    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
+  uint16_t psgs_in_sc = 0;
+  for (auto& cgs : combined_groups) {
+    psgs_in_sc += cgs.second.size();
+  }
 
   node_arc_config config{1.2, 30, 6, 10000};
   auto te_graph = build_time_expanded_graph(data, sched, config);
@@ -466,18 +483,25 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj =
       get_obj_after_assign(eg_psg_groups, solution, perc_tt_config);
   std::cout << "NODE-ARC ILP CUMULATIVE " << final_obj << std::endl;
+  /*
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     add_psgs_to_edges(solution[i], eg_psg_groups[i]);
   }
-  print_solution_routes(solution, eg_psg_groups, sched);
+  // print_solution_routes(solution, eg_psg_groups, sched);
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
   }
+   */
+
+  std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
+            << psgs_in_sc << ", OUTPUT assignments : " << solution.size()
+            << std::endl;
+
   throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
-    std::map<unsigned, std::vector<combined_passenger_group>>& combined_groups,
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
 
   perceived_tt_config perc_tt_config;
@@ -562,7 +586,7 @@ void paxassign::heuristic_assignments(
   throw std::runtime_error("heuristic algorithms finished");
 }
 
-void paxassign::on_forecast(const motis::module::msg_ptr& msg) {
+void paxassign::on_forecast(const motis::module::msg_ptr&) {
 
   /*
   auto const& sched = get_sched();
