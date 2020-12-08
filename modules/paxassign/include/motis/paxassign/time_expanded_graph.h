@@ -33,15 +33,19 @@ enum class eg_edge_type : std::uint8_t {
   TRIP,
   TRAIN_ENTRY,
   TRAIN_EXIT,
-  WAIT,
+  WAIT_TRANSPORT,
+  WAIT_STATION,
+  FINISH,
   NO_ROUTE
 };
 
 inline std::ostream& operator<<(std::ostream& out, eg_edge_type const et) {
   switch (et) {
     case eg_edge_type::TRIP: return out << "TRIP";
-    case eg_edge_type::WAIT: return out << "WAIT";
+    case eg_edge_type::WAIT_TRANSPORT: return out << "WAIT_TRANSPORT";
+    case eg_edge_type::WAIT_STATION: return out << "WAIT_STATION";
     case eg_edge_type::NO_ROUTE: return out << "NO_ROUTE";
+    case eg_edge_type::FINISH: return out << "FINISH";
     case eg_edge_type::TRAIN_ENTRY: return out << "TRAIN_ENTRY";
     case eg_edge_type::TRAIN_EXIT: return out << "TRAIN_EXIT";
   }
@@ -64,8 +68,10 @@ struct eg_edge {
 inline std::string eg_edge_type_to_string(eg_edge const* e) {
   switch (e->type_) {
     case eg_edge_type::TRIP: return "TRIP";
-    case eg_edge_type::WAIT: return "WAIT";
+    case eg_edge_type::WAIT_STATION: return "WAIT_STATION";
+    case eg_edge_type::WAIT_TRANSPORT: return "WAIT_TRANSPORT";
     case eg_edge_type::NO_ROUTE: return "NO_ROUTE";
+    case eg_edge_type::FINISH: return "FINISH";
     case eg_edge_type::TRAIN_ENTRY: return "TRAIN_ENTRY";
     case eg_edge_type::TRAIN_EXIT: return "TRAIN_EXIT";
   }

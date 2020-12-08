@@ -2,11 +2,33 @@
 
 namespace motis::paxassign {
 
-void print_solution_routes(std::vector<std::vector<eg_edge*>> const& solution,
-                           std::vector<eg_psg_group> const& eg_psg_groups,
-                           schedule const& sched) {
+void print_solution_routes_mini_halle(
+    std::map<std::uint16_t, combined_pg*> const& cpg_id_to_group,
+    std::vector<std::pair<ilp_psg_id, alt_idx>> const& alt_to_use,
+    schedule const& sched) {
+  for (auto& assignment : alt_to_use) {
+    auto cpg = cpg_id_to_group.at(assignment.first);
+    if (cpg->alternatives_.size() <= assignment.second) {
+      std::cout << "NO ROUTE ALTERNATIVE for GROUP(ID) " << cpg->id_ << " with "
+                << cpg->passengers_ << " passengers" << std::endl;
+    } else {
+      auto cj = motis::paxmon::to_compact_journey(
+          cpg->alternatives_[assignment.second].journey_, sched);
+      std::cout << "ROUTE for GROUP(ID) " << cpg->id_ << " with "
+                << cpg->passengers_ << " passengers:" << std::endl;
+      for (auto const& leg : cj.legs_) {
+        std::cout << leg.trip_->id_.primary_.train_nr_ << std::endl;
+      }
+    }
+  }
+}
+
+void print_solution_routes_node_arc(
+    std::vector<std::vector<eg_edge*>> const& solution,
+    std::vector<eg_psg_group> const& eg_psg_groups, schedule const& sched) {
   for (auto i = 0u; i < solution.size(); ++i) {
-    std::cout << "Psg: " << i << " count: " << eg_psg_groups[i].psg_count_
+    std::cout << "Psg ID: " << eg_psg_groups[i].cpg_.id_
+              << " psg count: " << eg_psg_groups[i].psg_count_
               << " edges : " << std::endl;
     for (auto const& e : solution[i]) {
       auto trp = (e->trip_ == nullptr)
@@ -24,7 +46,7 @@ void print_solution_routes(std::vector<std::vector<eg_edge*>> const& solution,
   }
 }
 
-void print_solution_routes_mini(
+void print_solution_routes_mini_node_arc(
     std::vector<std::vector<eg_edge*>> const& solution,
     std::vector<eg_psg_group> const& eg_psg_groups, schedule const&) {
   for (auto i = 0u; i < solution.size(); ++i) {

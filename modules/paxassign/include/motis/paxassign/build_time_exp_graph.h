@@ -61,15 +61,15 @@ inline eg_edge make_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
 }
 
 void add_not_in_trip_edge(eg_event_node* from, eg_event_node* to,
-                          eg_edge_type et, uint32_t transfer_time,
+                          eg_edge_type type, uint32_t transfer_time,
                           time_expanded_graph& g) {
   for (auto& e : from->out_edges_) {
-    if (e->type_ == et && e->to_ == to && e->cost_ == transfer_time) {
+    if (e->type_ == type && e->to_ == to && e->cost_ == transfer_time) {
       return;
     }
   }
   g.not_trip_edges_.emplace_back(
-      add_edge(make_not_in_trip_edge(from, to, et, transfer_time)));
+      add_edge(make_not_in_trip_edge(from, to, type, transfer_time)));
 }
 
 std::vector<eg_edge*> add_trip(schedule const& sched,
@@ -113,8 +113,8 @@ std::vector<eg_edge*> add_trip(schedule const& sched,
         dep_node, arr_node, eg_edge_type::TRIP, trp, soft_capacity,
         hard_capacity, edge_psgs, capacity_utilization, lc.full_con_->clasz_)));
     if (prev_node != nullptr) {
-      add_edge(make_trip_edge(prev_node, dep_node, eg_edge_type::WAIT, trp,
-                              soft_capacity, hard_capacity, edge_psgs,
+      add_edge(make_trip_edge(prev_node, dep_node, eg_edge_type::WAIT_TRANSPORT,
+                              trp, soft_capacity, hard_capacity, edge_psgs,
                               capacity_utilization, lc.full_con_->clasz_));
     }
     prev_node = arr_node;
@@ -142,7 +142,7 @@ void connect_wait_nodes(std::vector<eg_event_node*>& wait_nodes,
       [](auto const& lhs, auto const& rhs) { return lhs->time_ < rhs->time_; });
   for (auto i = 0u; i < wait_nodes.size() - 1; ++i) {
     g.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-        wait_nodes[i], wait_nodes[i + 1], eg_edge_type::WAIT,
+        wait_nodes[i], wait_nodes[i + 1], eg_edge_type::WAIT_STATION,
         wait_nodes[i + 1]->time_ - wait_nodes[i]->time_)));
   }
 }
@@ -266,7 +266,6 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                  n->time_ < cpg.localization_.current_arrival_time_;
         }) |
         utl::vec();
-
     if (relevant_nodes.empty()) {
       return psg_localization_node;
     } else {
@@ -275,7 +274,7 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                   return lhs->time_ < rhs->time_;
                 });
       te_graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-          psg_localization_node, relevant_nodes[0], eg_edge_type::WAIT,
+          psg_localization_node, relevant_nodes[0], eg_edge_type::WAIT_STATION,
           relevant_nodes[0]->time_ - psg_localization_node->time_)));
       return psg_localization_node;
     }
@@ -306,7 +305,7 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
             n->station_ == cpg.destination_station_id_ &&
             n->type_ == eg_event_type::ARR) {
           motis::paxassign::add_not_in_trip_edge(
-              n.get(), target_node, eg_edge_type::WAIT, 0, te_graph);
+              n.get(), target_node, eg_edge_type::FINISH, 0, te_graph);
         }
       }
       motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,

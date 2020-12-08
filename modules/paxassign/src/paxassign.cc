@@ -166,23 +166,6 @@ void paxassign::cap_ilp_assignment(
     ctx::await_all(futures);
   }
 
-  /*
-  {
-    scoped_timer no_alt_timer{"remove cpg with no alternatives"};
-    // TODO: don't erase them, just set something like no route status
-    for (auto& cgs : combined_groups) {
-      uint32_t cpg_idx = 0;
-      while (cpg_idx < cgs.second.size()) {
-        if (cgs.second[cpg_idx].alternatives_.empty()) {
-          cgs.second.erase(cgs.second.begin() + cpg_idx);
-        } else {
-          ++cpg_idx;
-        }
-      }
-    }
-  }
-  */
-
   {
     scoped_timer alt_trips_timer{"add alternatives to graph"};
     for (auto& cgs : combined_groups) {
@@ -393,28 +376,7 @@ void paxassign::cap_ilp_assignment(
                    variables_with_values)
             << std::endl;
 
-  for (auto& assignment : sol.alt_to_use_) {
-    if (cpg_id_to_group[assignment.first]->alternatives_.size() <=
-        assignment.second) {
-      std::cout << "NO ROUTE ALTERNATIVE for GROUP(ID) "
-                << cpg_id_to_group[assignment.first]->id_ << " with "
-                << cpg_id_to_group[assignment.first]->passengers_
-                << " passengers" << std::endl;
-    } else {
-      auto cj = motis::paxmon::to_compact_journey(
-          cpg_id_to_group[assignment.first]
-              ->alternatives_[assignment.second]
-              .journey_,
-          sched);
-      std::cout << "ROUTE for GROUP(ID) "
-                << cpg_id_to_group[assignment.first]->id_ << " with "
-                << cpg_id_to_group[assignment.first]->passengers_
-                << " passengers:" << std::endl;
-      for (auto const& leg : cj.legs_) {
-        std::cout << leg.trip_->id_.primary_.train_nr_ << std::endl;
-      }
-    }
-  }
+  print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
 
   std::cout << "HALLE APPROACH. Passengers in scenario INPUT : " << psgs_in_sc
             << ", OUTPUT assignments : " << sol.alt_to_use_.size() << std::endl;
@@ -482,15 +444,7 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj =
       get_obj_after_assign(eg_psg_groups, solution, perc_tt_config);
   std::cout << "NODE-ARC ILP CUMULATIVE " << final_obj << std::endl;
-  print_solution_routes_mini(solution, eg_psg_groups, sched);
-  /*
-  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-    add_psgs_to_edges(solution[i], eg_psg_groups[i]);
-  }
-  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-    remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
-  }
-   */
+  print_solution_routes_node_arc(solution, eg_psg_groups, sched);
 
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
             << psgs_in_sc << ", OUTPUT assignments : " << solution.size()
