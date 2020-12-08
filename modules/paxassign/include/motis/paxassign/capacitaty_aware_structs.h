@@ -19,10 +19,10 @@ struct cap_ILP_connection {
   std::vector<cap_ILP_edge*> edges_;
 };
 
-using ilp_psg_id = uint32_t;
+using ilp_psg_id = std::uint16_t;
 
 struct cap_ILP_psg_group {
-  ilp_psg_id id_;
+  std::uint16_t id_;
   std::vector<cap_ILP_connection> alternatives_;
   int psg_count_;
 };

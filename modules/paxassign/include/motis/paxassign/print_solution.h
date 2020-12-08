@@ -1,6 +1,7 @@
 #pragma once
 
 namespace motis::paxassign {
+
 void print_solution_routes(std::vector<std::vector<eg_edge*>> const& solution,
                            std::vector<eg_psg_group> const& eg_psg_groups,
                            schedule const& sched) {
@@ -22,6 +23,43 @@ void print_solution_routes(std::vector<std::vector<eg_edge*>> const& solution,
               << calc_perc_tt(solution[i], perceived_tt_config{}) << std::endl;
   }
 }
+
+void print_solution_routes_mini(
+    std::vector<std::vector<eg_edge*>> const& solution,
+    std::vector<eg_psg_group> const& eg_psg_groups, schedule const&) {
+  for (auto i = 0u; i < solution.size(); ++i) {
+    auto no_route_edge = std::find_if(
+        solution[i].begin(), solution[i].end(),
+        [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
+    if (no_route_edge != solution[i].end()) {
+      std::cout << "NO ROUTE ALTERNATIVE for GROUP(ID) "
+                << eg_psg_groups[i].cpg_.id_ << " with "
+                << eg_psg_groups[i].cpg_.passengers_ << " passengers"
+                << std::endl;
+      continue;
+    }
+    std::vector<uint64_t> driven_transports;
+    for (auto const& e : solution[i]) {
+      if (!e->trip_) {
+        continue;
+      }
+      if (driven_transports.empty()) {
+        driven_transports.push_back(e->trip_->id_.primary_.train_nr_);
+      } else {
+        if (driven_transports.back() != e->trip_->id_.primary_.train_nr_) {
+          driven_transports.push_back(e->trip_->id_.primary_.train_nr_);
+        }
+      }
+    }
+    std::cout << "ROUTE for GROUP(ID) " << eg_psg_groups[i].cpg_.id_ << " with "
+              << eg_psg_groups[i].cpg_.passengers_
+              << " passengers:" << std::endl;
+    for (auto e_idx = 0u; e_idx < driven_transports.size(); ++e_idx) {
+      std::cout << driven_transports[e_idx] << std::endl;
+    }
+  }
+}
+
 void print_solution_statistics(
     std::vector<std::vector<eg_edge*>> const& solution,
     std::vector<eg_psg_group> const& eg_psg_groups, schedule const&) {

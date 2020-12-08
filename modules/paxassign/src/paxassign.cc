@@ -241,8 +241,7 @@ void paxassign::cap_ilp_assignment(
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
 
-  std::map<uint32_t, combined_pg*> cap_ilp_psg_to_cpg;
-  uint32_t curr_cpg_id = 1;
+  std::map<std::uint16_t, combined_pg*> cpg_id_to_group;
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
@@ -368,9 +367,9 @@ void paxassign::cap_ilp_assignment(
         }
         cpg_ILP_connections.push_back(
             cap_ILP_connection{curr_alt_id++, 0, {&no_route_edge}});
-        cap_ilp_psg_to_cpg[curr_cpg_id] = &cpg;
-        cap_ILP_scenario.push_back(cap_ILP_psg_group{
-            curr_cpg_id++, cpg_ILP_connections, cpg.passengers_});
+        cap_ILP_scenario.push_back(
+            cap_ILP_psg_group{cpg.id_, cpg_ILP_connections, cpg.passengers_});
+        cpg_id_to_group[cpg.id_] = &cpg;
       }
     }
   }
@@ -395,21 +394,21 @@ void paxassign::cap_ilp_assignment(
             << std::endl;
 
   for (auto& assignment : sol.alt_to_use_) {
-    if (cap_ilp_psg_to_cpg[assignment.first]->alternatives_.size() <=
+    if (cpg_id_to_group[assignment.first]->alternatives_.size() <=
         assignment.second) {
-      std::cout << "NO ROUTE ALTERNATIVE for "
-                << cap_ilp_psg_to_cpg[assignment.first]->groups_[0]->id_
-                << " with " << cap_ilp_psg_to_cpg[assignment.first]->passengers_
+      std::cout << "NO ROUTE ALTERNATIVE for GROUP(ID) "
+                << cpg_id_to_group[assignment.first]->id_ << " with "
+                << cpg_id_to_group[assignment.first]->passengers_
                 << " passengers" << std::endl;
     } else {
       auto cj = motis::paxmon::to_compact_journey(
-          cap_ilp_psg_to_cpg[assignment.first]
+          cpg_id_to_group[assignment.first]
               ->alternatives_[assignment.second]
               .journey_,
           sched);
-      std::cout << "ROUTE for "
-                << cap_ilp_psg_to_cpg[assignment.first]->groups_[0]->id_
-                << " with " << cap_ilp_psg_to_cpg[assignment.first]->passengers_
+      std::cout << "ROUTE for GROUP(ID) "
+                << cpg_id_to_group[assignment.first]->id_ << " with "
+                << cpg_id_to_group[assignment.first]->passengers_
                 << " passengers:" << std::endl;
       for (auto const& leg : cj.legs_) {
         std::cout << leg.trip_->id_.primary_.train_nr_ << std::endl;
@@ -483,11 +482,11 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj =
       get_obj_after_assign(eg_psg_groups, solution, perc_tt_config);
   std::cout << "NODE-ARC ILP CUMULATIVE " << final_obj << std::endl;
+  print_solution_routes_mini(solution, eg_psg_groups, sched);
   /*
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     add_psgs_to_edges(solution[i], eg_psg_groups[i]);
   }
-  // print_solution_routes(solution, eg_psg_groups, sched);
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
   }
