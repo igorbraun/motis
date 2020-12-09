@@ -80,6 +80,10 @@ double piecewise_linear_convex_perceived_tt_halle(
     perceived_tt_config const& perc_tt_config,
     std::map<std::string, std::tuple<double, double, double, double>> const&) {
   double result = 0;
+
+  double cum_no_route = 0;
+  double cum_trips_waits = 0;
+
   auto assgmts =
       calculate_assignments_to_edges_halle(cap_ILP_scenario, assignment);
   std::set<cap_ILP_edge*> handled_edges;
@@ -94,6 +98,7 @@ double piecewise_linear_convex_perceived_tt_halle(
     auto const& e = asg.first;
     if (e->type_ == edge_type::NOROUTE) {
       result += asg.second * perc_tt_config.no_route_cost_;
+      cum_no_route += asg.second * perc_tt_config.no_route_cost_;
       continue;
     }
     if (e->type_ == edge_type::INTERCHANGE) {
@@ -122,16 +127,24 @@ double piecewise_linear_convex_perceived_tt_halle(
         if (remaining_assgmnts > remaining_cap) {
           result += remaining_cap *
                     (perc_tt_config.tt_and_waiting_penalties_[i] * e->tt_);
-
+          cum_trips_waits +=
+              remaining_cap *
+              (perc_tt_config.tt_and_waiting_penalties_[i] * e->tt_);
           remaining_assgmnts -= remaining_cap;
         } else {
           result += remaining_assgmnts *
                     (perc_tt_config.tt_and_waiting_penalties_[i] * e->tt_);
+          cum_trips_waits +=
+              remaining_assgmnts *
+              (perc_tt_config.tt_and_waiting_penalties_[i] * e->tt_);
           remaining_assgmnts = 0;
         }
       }
     }
   }
+
+  std::cout << "CUM NO ROUTE: " << cum_no_route << std::endl;
+  std::cout << "CUM TRIPS AND WAITS: " << cum_trips_waits << std::endl;
 
   return result;
 }
@@ -157,12 +170,17 @@ double piecewise_linear_convex_perceived_tt_node_arc(
     std::vector<std::vector<eg_edge*>> const& solution,
     perceived_tt_config const& perc_tt_config) {
   double result = 0;
+
+  double cum_no_route = 0.0;
+  double cum_trips_waits = 0.0;
+
   auto assgmts = calculate_assignments_to_edges_node_arc(psg_groups, solution);
 
   for (auto const& asg : assgmts) {
     auto const& e = asg.first;
     if (e->type_ == eg_edge_type::NO_ROUTE) {
       result += asg.second * perc_tt_config.no_route_cost_;
+      cum_no_route += asg.second * perc_tt_config.no_route_cost_;
       continue;
     }
     if (e->type_ == eg_edge_type::TRAIN_ENTRY) {
@@ -192,11 +210,16 @@ double piecewise_linear_convex_perceived_tt_node_arc(
         if (remaining_assgmnts > remaining_cap) {
           result += remaining_cap *
                     (perc_tt_config.tt_and_waiting_penalties_[i] * e->cost_);
-
+          cum_trips_waits +=
+              remaining_cap *
+              (perc_tt_config.tt_and_waiting_penalties_[i] * e->cost_);
           remaining_assgmnts -= remaining_cap;
         } else {
           result += remaining_assgmnts *
                     (perc_tt_config.tt_and_waiting_penalties_[i] * e->cost_);
+          cum_trips_waits +=
+              remaining_assgmnts *
+              (perc_tt_config.tt_and_waiting_penalties_[i] * e->cost_);
           remaining_assgmnts = 0;
         }
       }
@@ -208,6 +231,10 @@ double piecewise_linear_convex_perceived_tt_node_arc(
       result += asg.second * e->cost_;
     }
   }
+
+  std::cout << std::fixed << "CUM NO ROUTE: " << cum_no_route << std::endl;
+  std::cout << std::fixed << "CUM TRIPS AND WAITS: " << cum_trips_waits
+            << std::endl;
 
   return result;
 }

@@ -17,13 +17,13 @@ cap_ILP_solution build_ILP_from_scenario_API(
     std::map<std::string, std::tuple<double, double, double, double>>&
         variables_with_values) {
   try {
-    std::set<cap_ILP_edge const*> handled_edges;
-    std::map<uint32_t, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
+    std::set<cap_ILP_edge*> handled_edges;
+    std::map<cap_ILP_edge*, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
 
     for (auto const& pg : passengers) {
       for (auto const& a : pg.alternatives_) {
         for (auto const& e : a.edges_) {
-          edge_to_psgs[e->id_].insert(&pg);
+          edge_to_psgs[e].insert(&pg);
           handled_edges.insert(e);
         }
       }
@@ -35,12 +35,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
     GRBModel model = GRBModel(env);
 
     // EDGE VARIABLES
-    auto pr =
-        std::max_element(std::begin(handled_edges), std::end(handled_edges),
-                         [](cap_ILP_edge const* e1, cap_ILP_edge const* e2) {
-                           return e1->id_ < e2->id_;
-                         });
-    std::vector<std::vector<GRBVar>> edge_cost_vars((*pr)->id_ + 1);
+    std::map<cap_ILP_edge*, std::vector<GRBVar>> edge_cost_vars;
     for (auto const& e : handled_edges) {
       switch (e->type_) {
         case edge_type::TRIP: {
@@ -62,9 +57,14 @@ cap_ILP_solution build_ILP_from_scenario_API(
             }
             last_cap_step = curr_cap_step;
             if (remaining_cap == 0) continue;
-            edge_cost_vars[e->id_].push_back(model.addVar(
+            edge_cost_vars[e].push_back(model.addVar(
                 0.0, remaining_cap, penalty * e->tt_, GRB_INTEGER,
-                "T_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
+                "T_" + std::to_string(e->from_->station_) + "_" +
+                    std::to_string(e->to_->station_) + "_" +
+                    std::to_string(e->from_->time_) + "_" +
+                    std::to_string(e->to_->time_) + "_" +
+                    std::to_string(e->trip_->id_.primary_.train_nr_) + "_" +
+                    std::to_string(i)));
           }
           break;
         }
@@ -87,23 +87,29 @@ cap_ILP_solution build_ILP_from_scenario_API(
             }
             last_cap_step = curr_cap_step;
             if (remaining_cap == 0) continue;
-            edge_cost_vars[e->id_].push_back(model.addVar(
+            edge_cost_vars[e].push_back(model.addVar(
                 0.0, remaining_cap, penalty * e->tt_, GRB_INTEGER,
-                "W_f_" + std::to_string(e->id_) + "_" + std::to_string(i)));
+                "W_" + std::to_string(e->from_->station_) + "_" +
+                    std::to_string(e->to_->station_) + "_" +
+                    std::to_string(e->from_->time_) + "_" +
+                    std::to_string(e->to_->time_) + "_" + std::to_string(i)));
           }
           break;
         }
         case edge_type::INTERCHANGE: {
-          edge_cost_vars[e->id_].push_back(
+          edge_cost_vars[e].push_back(
               model.addVar(0.0, std::numeric_limits<double>::max(),
                            config.transfer_penalty_ + e->tt_, GRB_INTEGER,
-                           "I_f_" + std::to_string(e->id_)));
+                           "I_" + std::to_string(e->from_->station_) + "_" +
+                               std::to_string(e->to_->station_) + "_" +
+                               std::to_string(e->from_->time_) + "_" +
+                               std::to_string(e->to_->time_)));
           break;
         }
         case edge_type::NOROUTE: {
-          edge_cost_vars[e->id_].push_back(model.addVar(
-              0.0, std::numeric_limits<double>::max(), config.no_route_cost_,
-              GRB_INTEGER, "NR_f_" + std::to_string(e->id_)));
+          edge_cost_vars[e].push_back(
+              model.addVar(0.0, std::numeric_limits<double>::max(),
+                           config.no_route_cost_, GRB_INTEGER, "NOROUTE"));
           break;
         }
       }
@@ -125,11 +131,11 @@ cap_ILP_solution build_ILP_from_scenario_API(
     }
 
     // PSG-EDGE USAGE VARIABLES
-    std::vector<std::vector<std::pair<uint32_t, GRBVar>>> edge_usage_vars(
-        (*pr)->id_ + 1);
+    std::map<cap_ILP_edge*, std::vector<std::pair<uint32_t, GRBVar>>>
+        edge_usage_vars;
     for (auto const& e : handled_edges) {
-      for (auto const& pg : edge_to_psgs[e->id_]) {
-        edge_usage_vars[e->id_].push_back(
+      for (auto const& pg : edge_to_psgs[e]) {
+        edge_usage_vars[e].push_back(
             {pg->id_, model.addVar(0.0, 1.0, 0.0, GRB_BINARY,
                                    "delta_" + std::to_string(pg->id_) + "_" +
                                        std::to_string(e->id_))});
@@ -151,7 +157,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
       uint16_t alt_id = 0;
       for (auto const& a : pg.alternatives_) {
         for (auto const& e : a.edges_) {
-          for (auto const& p_to_edge : edge_usage_vars[e->id_]) {
+          for (auto const& p_to_edge : edge_usage_vars[e]) {
             if (p_to_edge.first == pg.id_) {
               model.addGenConstrIndicator(alt_route_vars[pg.id_][alt_id], 1.0,
                                           p_to_edge.second, GRB_EQUAL, 1.0);
@@ -166,13 +172,13 @@ cap_ILP_solution build_ILP_from_scenario_API(
     // EDGES CAPACITY
     for (auto const& e : handled_edges) {
       GRBLinExpr lhs = 0;
-      for (auto const& p_to_edge : edge_usage_vars[e->id_]) {
+      for (auto const& p_to_edge : edge_usage_vars[e]) {
         auto pg_it = std::find_if(
             std::begin(passengers), std::end(passengers),
             [&](auto const& p) { return p.id_ == p_to_edge.first; });
         lhs += pg_it->psg_count_ * p_to_edge.second;
       }
-      for (auto const& ec_v : edge_cost_vars[e->id_]) {
+      for (auto const& ec_v : edge_cost_vars[e]) {
         lhs -= ec_v;
       }
       model.addConstr(lhs, GRB_EQUAL, 0.0);
@@ -219,7 +225,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
       }
     }
     for (auto const& ecv : edge_cost_vars) {
-      for (auto const& curr_ecv : ecv) {
+      for (auto const& curr_ecv : ecv.second) {
         variables_with_values[curr_ecv.get(GRB_StringAttr_VarName)] =
             std::make_tuple(curr_ecv.get(GRB_DoubleAttr_X),
                             curr_ecv.get(GRB_DoubleAttr_Obj),
@@ -248,6 +254,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
   return {};
 }
 
+/*
 void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
                              perceived_tt_config const& config,
                              std::string const& scenario_id) {
@@ -255,11 +262,11 @@ void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
   // OBJECTIVE PART
   ilp_file << "Minimize\n";
   std::set<cap_ILP_edge const*> handled_edges;
-  std::map<uint32_t, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
+  std::map<cap_ILP_edge*, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
   for (auto const& pg : passengers) {
     for (auto const& a : pg.alternatives_) {
       for (auto const& e : a.edges_) {
-        edge_to_psgs[e->id_].insert(&pg);
+        edge_to_psgs[e].insert(&pg);
         if (handled_edges.find(e) != handled_edges.end()) {
           continue;
         }
@@ -365,4 +372,5 @@ void build_ILP_from_scenario(std::vector<cap_ILP_psg_group> const& passengers,
   ilp_file << "End";
   ilp_file.close();
 }
+ */
 }  // namespace motis::paxassign

@@ -10,70 +10,87 @@
 #include "motis/paxmon/graph.h"
 
 namespace motis::paxassign {
-
+/*
 void build_toy_scenario() {
-  std::cout << "BUILD TEST SCENARIO" << std::endl;
-  perceived_tt_config config;
+std::cout << "BUILD TEST SCENARIO" << std::endl;
+perceived_tt_config config;
 
   // frist graph
   cap_ILP_edge e1{
-      1,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_1_2{
-      100,
+      nullptr,
+      nullptr,
       5,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e2{
-      2,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
-  cap_ILP_connection c1{1, 100, std::vector<cap_ILP_edge*>{&e1, &ew_1_2, &e2}};
+      edge_type::TRIP,
+      nullptr};
+  cap_ILP_connection c1{1, 100, std::vector<cap_ILP_edge*>{&e1, &ew_1_2,
+&e2}};
 
   cap_ILP_edge e3{
-      3,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_3_4{
-      101,
+      nullptr,
+      nullptr,
       5,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e4{
-      4,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_4_5{
-      102,
+      nullptr,
+      nullptr,
       5,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e5{
-      5,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_connection c2{
       2, 100, std::vector<cap_ILP_edge*>{&e3, &ew_3_4, &e4, &ew_4_5, &e5}};
   cap_ILP_psg_group pg1{1, std::vector<cap_ILP_connection>{c1, c2},
@@ -81,64 +98,80 @@ void build_toy_scenario() {
 
   // second graph
   cap_ILP_edge e6{
-      6,
+      nullptr,
+      nullptr,
       10,
       80,
       static_cast<uint64_t>(80 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_6_7{
-      103,
+      nullptr,
+      nullptr,
       5,
       80,
       static_cast<uint64_t>(80 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e7{
-      7,
+      nullptr,
+      nullptr,
       10,
       80,
       static_cast<uint64_t>(80 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_7_8{
-      104,
+      nullptr,
+      nullptr,
       5,
       80,
       static_cast<uint64_t>(80 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e8{
-      8,
+      nullptr,
+      nullptr,
       10,
       80,
       static_cast<uint64_t>(80 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_connection c3{
       3, 100, std::vector<cap_ILP_edge*>{&e6, &ew_6_7, &e7, &ew_7_8, &e8}};
 
   cap_ILP_edge e9{
-      9,
+      nullptr,
+      nullptr,
       10,
       20,
       static_cast<uint64_t>(20 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_9_10{
-      105,
+      nullptr,
+      nullptr,
       5,
       20,
       static_cast<uint64_t>(20 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e10{
-      10,
+      nullptr,
+      nullptr,
       10,
       20,
       static_cast<uint64_t>(20 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_connection c4{4, 100,
                         std::vector<cap_ILP_edge*>{&e9, &ew_9_10, &e10}};
   cap_ILP_psg_group pg2{2, std::vector<cap_ILP_connection>{c3, c4},
@@ -148,50 +181,62 @@ void build_toy_scenario() {
 
   // third graph
   cap_ILP_edge e11{
-      11,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_11_12{
-      106,
+      nullptr,
+      nullptr,
       5,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e12{
-      12,
+      nullptr,
+      nullptr,
       10,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_connection c5{5, 100,
                         std::vector<cap_ILP_edge*>{&e11, &ew_11_12, &e12}};
 
   cap_ILP_edge e13{
-      13,
+      nullptr,
+      nullptr,
       20,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_edge ew_13_14{
-      107,
+      nullptr,
+      nullptr,
       5,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::WAIT};
+      edge_type::WAIT,
+      nullptr};
   cap_ILP_edge e14{
-      14,
+      nullptr,
+      nullptr,
       20,
       30,
       static_cast<uint64_t>(30 * config.cost_function_capacity_steps_.back()),
       0,
-      edge_type::TRIP};
+      edge_type::TRIP,
+      nullptr};
   cap_ILP_connection c6{6, 100,
                         std::vector<cap_ILP_edge*>{&e13, &ew_13_14, &e14}};
   cap_ILP_psg_group pg4{4, std::vector<cap_ILP_connection>{c5, c6},
@@ -217,5 +262,7 @@ void build_toy_scenario() {
   std::cout << "Constraints: " << sol.stats_.num_constraints_ << std::endl;
   std::cout << "Run time: " << sol.stats_.run_time_ << std::endl;
 }
+
+*/
 
 }  // namespace motis::paxassign

@@ -110,6 +110,10 @@ struct edge {
     return *sched.merged_trips_.at(trips_);
   }
 
+  inline ptr<trip> const& get_trip(schedule const& sched) const {
+    return get_trips(sched)[0];
+  }
+
   inline duration transfer_time() const { return transfer_time_; }
 
   inline std::uint16_t capacity() const {

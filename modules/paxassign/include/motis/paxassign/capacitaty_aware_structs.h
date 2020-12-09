@@ -4,13 +4,18 @@ namespace motis::paxassign {
 
 enum class edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT, NOROUTE };
 
+// from time; to time; from station; to station; train_nr
+
 struct cap_ILP_edge {
+  event_node* from_;
+  event_node* to_;
   uint32_t id_;
   uint32_t tt_;
   std::uint64_t soft_cap_boundary_{};
   std::uint64_t hard_cap_boundary_{};
   std::uint64_t passengers_{};
   edge_type type_;
+  struct trip const* trip_;
 };
 
 struct cap_ILP_connection {

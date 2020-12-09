@@ -68,7 +68,7 @@ void paxassign::init(motis::module::registry& reg) {
 
 void paxassign::toy_scenario(const motis::module::msg_ptr&) {
   std::cout << "paxassign toyscenario" << std::endl;
-  build_toy_scenario();
+  // build_toy_scenario();
 }
 
 uint32_t find_edge_idx(trip_data const* td,
@@ -230,12 +230,15 @@ void paxassign::cap_ilp_assignment(
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
 
   perceived_tt_config perc_tt_config{};
-  cap_ILP_edge no_route_edge{curr_e_id++,
+  cap_ILP_edge no_route_edge{nullptr,
+                             nullptr,
+                             curr_e_id++,
                              perc_tt_config.no_route_cost_,
                              std::numeric_limits<std::uint64_t>::max(),
                              std::numeric_limits<std::uint64_t>::max(),
                              0,
-                             edge_type::NOROUTE};
+                             edge_type::NOROUTE,
+                             nullptr};
 
   std::vector<cap_ILP_psg_group> cap_ILP_scenario;
   {
@@ -266,6 +269,8 @@ void paxassign::cap_ilp_assignment(
 
               if (cap_edges.find(td->edges_[i]) == cap_edges.end()) {
                 cap_edges[td->edges_[i]] = cap_ILP_edge{
+                    td->edges_[i]->from_,
+                    td->edges_[i]->to_,
                     curr_e_id++,
                     static_cast<uint32_t>(td->edges_[i]->to_->current_time() -
                                           td->edges_[i]->from_->current_time()),
@@ -279,7 +284,8 @@ void paxassign::cap_ilp_assignment(
                                   .back())
                         : std::numeric_limits<std::uint64_t>::max(),
                     td->edges_[i]->passengers(),
-                    edge_type::TRIP};
+                    edge_type::TRIP,
+                    td->edges_[i]->get_trip(sched)};
               }
               curr_connection.edges_.push_back(&cap_edges[td->edges_[i]]);
 
@@ -291,10 +297,11 @@ void paxassign::cap_ilp_assignment(
                       oe->to_ == td->edges_[i + 1]->from_) {
                     if (cap_edges.find(oe.get()) == cap_edges.end()) {
                       cap_edges[oe.get()] = cap_ILP_edge{
+                          oe->from_,
+                          oe->to_,
                           curr_e_id++,
-                          static_cast<uint32_t>(
-                              td->edges_[i + 1]->from_->current_time() -
-                              td->edges_[i]->to_->current_time()),
+                          static_cast<uint32_t>(oe->to_->time_ -
+                                                oe->from_->time_),
                           oe->has_capacity()
                               ? oe->capacity()
                               : std::numeric_limits<std::uint64_t>::max(),
@@ -305,7 +312,8 @@ void paxassign::cap_ilp_assignment(
                                         .back())
                               : std::numeric_limits<std::uint64_t>::max(),
                           oe->passengers(),
-                          edge_type::WAIT};
+                          edge_type::WAIT,
+                          oe->get_trip(sched)};
                     }
                     curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
                   }
@@ -328,19 +336,18 @@ void paxassign::cap_ilp_assignment(
                     oe->to_ == td_next->edges_[inch_target_st_idx]->from_) {
                   if (cap_edges.find(oe.get()) == cap_edges.end()) {
                     cap_edges[oe.get()] =
-                        cap_ILP_edge{curr_e_id++,
-                                     oe->transfer_time(),
+                        cap_ILP_edge{oe->from_,
+                                     oe->to_,
+                                     curr_e_id++,
+                                     0,
                                      std::numeric_limits<std::uint64_t>::max(),
                                      std::numeric_limits<std::uint64_t>::max(),
                                      0,
-                                     edge_type::INTERCHANGE};
+                                     edge_type::INTERCHANGE,
+                                     nullptr};
                   }
                   curr_connection.edges_.push_back(&cap_edges.at(oe.get()));
-                  associated_waiting_time +=
-                      (td_next->edges_[inch_target_st_idx]
-                           ->from_->current_time() -
-                       td->edges_[last_edge_idx]->to_->current_time() -
-                       oe->transfer_time());
+                  associated_waiting_time += oe->to_->time_ - oe->from_->time_;
                 }
               }
             }
@@ -370,10 +377,9 @@ void paxassign::cap_ilp_assignment(
                                       variables_with_values);
   }
 
-  std::cout << "manually calculated perc_tt of halle ILP : "
-            << piecewise_linear_convex_perceived_tt_halle(
-                   cap_ILP_scenario, sol.alt_to_use_, perc_tt_config,
-                   variables_with_values)
+  auto final_obj = piecewise_linear_convex_perceived_tt_halle(
+      cap_ILP_scenario, sol.alt_to_use_, perc_tt_config, variables_with_values);
+  std::cout << "manually calculated perc_tt of halle ILP : " << final_obj
             << std::endl;
 
   print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
@@ -445,7 +451,7 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
-  //print_solution_routes_node_arc(solution, eg_psg_groups, sched);
+  // print_solution_routes_node_arc(solution, eg_psg_groups, sched);
 
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
             << psgs_in_sc << ", OUTPUT assignments : " << solution.size()
