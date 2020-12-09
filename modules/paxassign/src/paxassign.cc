@@ -371,7 +371,7 @@ void paxassign::cap_ilp_assignment(
   }
 
   std::cout << "manually calculated perc_tt of halle ILP : "
-            << piecewise_linear_convex_perceived_tt(
+            << piecewise_linear_convex_perceived_tt_halle(
                    cap_ILP_scenario, sol.alt_to_use_, perc_tt_config,
                    variables_with_values)
             << std::endl;
@@ -442,10 +442,10 @@ void paxassign::node_arc_ilp_assignment(
   auto solution =
       node_arc_ilp(eg_psg_groups, te_graph, na_config, perc_tt_config, sched);
 
-  double final_obj =
-      get_obj_after_assign(eg_psg_groups, solution, perc_tt_config);
-  std::cout << "NODE-ARC ILP CUMULATIVE " << final_obj << std::endl;
-  print_solution_routes_node_arc(solution, eg_psg_groups, sched);
+  double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, solution, perc_tt_config);
+  std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
+  //print_solution_routes_node_arc(solution, eg_psg_groups, sched);
 
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
             << psgs_in_sc << ", OUTPUT assignments : " << solution.size()
