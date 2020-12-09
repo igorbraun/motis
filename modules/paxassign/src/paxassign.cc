@@ -432,15 +432,16 @@ void paxassign::node_arc_ilp_assignment(
     psgs_in_sc += cgs.second.size();
   }
 
-  node_arc_config config{1.2, 30, 6, 10000};
-  auto te_graph = build_time_expanded_graph(data, sched, config);
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  perceived_tt_config perc_tt_config;
+  auto te_graph = build_time_expanded_graph(data, sched, na_config);
 
   auto eg_psg_groups =
-      add_psgs_to_te_graph(combined_groups, sched, config, te_graph);
+      add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
 
-  auto solution = node_arc_ilp(eg_psg_groups, te_graph, config, sched);
+  auto solution =
+      node_arc_ilp(eg_psg_groups, te_graph, na_config, perc_tt_config, sched);
 
-  perceived_tt_config perc_tt_config;
   double final_obj =
       get_obj_after_assign(eg_psg_groups, solution, perc_tt_config);
   std::cout << "NODE-ARC ILP CUMULATIVE " << final_obj << std::endl;

@@ -184,6 +184,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
     model.optimize();
 
     // model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
+    model.write("motis/build/rel/ilp_files/halle.sol");
 
     int status = model.get(GRB_IntAttr_Status);
     if (status != GRB_OPTIMAL) {
