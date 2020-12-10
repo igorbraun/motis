@@ -133,14 +133,16 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  cap_ilp_assignment(combined_groups, data, sched);
+  // cap_ilp_assignment(combined_groups, data, sched);
   node_arc_ilp_assignment(combined_groups, data, sched);
   heuristic_assignments(combined_groups, data, sched);
 }
 
 void paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-    paxmon_data& data, schedule const& sched) {
+    paxmon_data& data, schedule const& sched,
+    std::map<std::string, std::tuple<double, double, double, double>>&
+        variables_with_values) {
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
     psgs_in_sc += cgs.second.size();
@@ -206,12 +208,12 @@ void paxassign::cap_ilp_assignment(
             if (last_node != nullptr) {
               // TODO. interchange edge cost here and in the node-arc graph
               // should be equivalent. Check it
-              auto const transfer_time =
-                  get_transfer_duration(leg.enter_transfer_);
+              // auto const transfer_time =
+              // get_transfer_duration(leg.enter_transfer_);
               auto const inch_e_start_idx = find_edge_idx(td, leg, true);
               add_interchange_edge(last_node,
-                                   td->edges_[inch_e_start_idx]->from_,
-                                   transfer_time, data.graph_);
+                                   td->edges_[inch_e_start_idx]->from_, 0,
+                                   data.graph_);
             }
             auto const leg_last_st_idx = find_edge_idx(td, leg, false);
             last_node = td->edges_[leg_last_st_idx]->to_;
@@ -228,6 +230,7 @@ void paxassign::cap_ilp_assignment(
   uint32_t curr_e_id = 1;
   uint32_t curr_alt_id = 1;
   std::map<motis::paxmon::edge*, motis::paxassign::cap_ILP_edge> cap_edges;
+  std::map<uint32_t, motis::paxassign::cap_ILP_edge> train_entry_cap_edges;
 
   perceived_tt_config perc_tt_config{};
   cap_ILP_edge no_route_edge{nullptr,
@@ -249,9 +252,30 @@ void paxassign::cap_ilp_assignment(
         for (auto const& alt : cpg.alternatives_) {
           cap_ILP_connection curr_connection{curr_alt_id++, 0,
                                              std::vector<cap_ILP_edge*>{}};
-          // TODO: check, that waiting time here and in the node-arc graph
-          // (represented through multiple edges) are equivalent
           uint32_t associated_waiting_time = 0;
+
+          if (!cpg.localization_.in_trip() ||
+              (cpg.localization_.in_trip_ !=
+               alt.compact_journey_.legs_.begin()->trip_)) {
+            auto const td = data.graph_.trip_data_
+                                .at(alt.compact_journey_.legs_.begin()->trip_)
+                                .get();
+            auto first_node_idx =
+                find_edge_idx(td, *alt.compact_journey_.legs_.begin(), true);
+            train_entry_cap_edges[curr_e_id] =
+                cap_ILP_edge{td->edges_[first_node_idx]->from_,
+                             td->edges_[first_node_idx]->from_,
+                             curr_e_id,
+                             0,
+                             std::numeric_limits<std::uint64_t>::max(),
+                             std::numeric_limits<std::uint64_t>::max(),
+                             0,
+                             edge_type::INTERCHANGE,
+                             nullptr};
+            curr_connection.edges_.push_back(
+                &train_entry_cap_edges[curr_e_id++]);
+          }
+
           for (auto const [leg_idx, leg] :
                utl::enumerate(alt.compact_journey_.legs_)) {
             auto const td = data.graph_.trip_data_.at(leg.trip_).get();
@@ -266,6 +290,11 @@ void paxassign::cap_ilp_assignment(
                     (td->edges_[i]->from_->current_time() -
                      cpg.localization_.current_arrival_time_);
               }
+
+              std::uint64_t last_trip_edge_cap =
+                  td->edges_[i]->has_capacity()
+                      ? td->edges_[i]->capacity()
+                      : std::numeric_limits<std::uint64_t>::max();
 
               if (cap_edges.find(td->edges_[i]) == cap_edges.end()) {
                 cap_edges[td->edges_[i]] = cap_ILP_edge{
@@ -302,15 +331,14 @@ void paxassign::cap_ilp_assignment(
                           curr_e_id++,
                           static_cast<uint32_t>(oe->to_->time_ -
                                                 oe->from_->time_),
-                          oe->has_capacity()
-                              ? oe->capacity()
-                              : std::numeric_limits<std::uint64_t>::max(),
-                          oe->has_capacity()
-                              ? static_cast<uint64_t>(
-                                    oe->capacity() *
+                          last_trip_edge_cap,
+                          (last_trip_edge_cap ==
+                           std::numeric_limits<std::uint64_t>::max())
+                              ? std::numeric_limits<std::uint64_t>::max()
+                              : static_cast<uint64_t>(
+                                    last_trip_edge_cap *
                                     perc_tt_config.cost_function_capacity_steps_
-                                        .back())
-                              : std::numeric_limits<std::uint64_t>::max(),
+                                        .back()),
                           oe->passengers(),
                           edge_type::WAIT,
                           oe->get_trip(sched)};
@@ -364,8 +392,6 @@ void paxassign::cap_ilp_assignment(
     }
   }
 
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values;
   cap_ILP_solution sol;
   {
     scoped_timer alt_timer{"solve capacitated model"};
@@ -433,6 +459,10 @@ void paxassign::cap_ilp_assignment(
 void paxassign::node_arc_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values_halle;
+  cap_ilp_assignment(combined_groups, data, sched, variables_with_values_halle);
+
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
     psgs_in_sc += cgs.second.size();
@@ -445,17 +475,36 @@ void paxassign::node_arc_ilp_assignment(
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
 
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values_node_arc;
   auto solution =
-      node_arc_ilp(eg_psg_groups, te_graph, na_config, perc_tt_config, sched);
+      node_arc_ilp(eg_psg_groups, te_graph, na_config, perc_tt_config, sched,
+                   variables_with_values_node_arc);
 
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
-  // print_solution_routes_node_arc(solution, eg_psg_groups, sched);
+  print_solution_routes_node_arc(solution, eg_psg_groups, sched);
 
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
             << psgs_in_sc << ", OUTPUT assignments : " << solution.size()
             << std::endl;
+  /*
+    std::cout << "HALLE APPROACH: " << std::endl;
+    for (auto const& var_halle : variables_with_values_halle) {
+      std::cout << var_halle.first << ": val: " << std::get<0>(var_halle.second)
+                << ", obj coef: " << std::get<1>(var_halle.second)
+                << ", obj: " << std::get<2>(var_halle.second)
+                << ", ub: " << std::get<3>(var_halle.second) << std::endl;
+    }
+    std::cout << "NODE-ARC APPROACH: " << std::endl;
+    for (auto const& var_halle : variables_with_values_node_arc) {
+      std::cout << var_halle.first << ": val: " << std::get<0>(var_halle.second)
+                << ", obj coef: " << std::get<1>(var_halle.second)
+                << ", obj: " << std::get<2>(var_halle.second)
+                << ", ub: " << std::get<3>(var_halle.second) << std::endl;
+    }
+    */
 
   throw std::runtime_error("time expanded graph is built");
 }

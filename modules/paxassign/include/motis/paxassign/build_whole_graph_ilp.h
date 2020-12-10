@@ -11,12 +11,16 @@ namespace motis::paxassign {
 std::vector<std::vector<eg_edge*>> node_arc_ilp(
     std::vector<eg_psg_group>& psg_groups, time_expanded_graph const& te_graph,
     node_arc_config const& na_config, perceived_tt_config const& tt_config,
-    schedule const& sched) {
+    schedule const& sched,
+    std::map<std::string, std::tuple<double, double, double, double>>&
+        variables_with_values) {
   try {
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
     env.start();
     GRBModel model = GRBModel(env);
+
+    uint64_t curr_var_nr = 0;
 
     std::map<eg_edge*, std::vector<GRBVar>> edge_cost_vars;
     for (auto const& n : te_graph.nodes_) {
@@ -43,8 +47,12 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
               if (remaining_cap == 0) continue;
               edge_cost_vars[e.get()].push_back(model.addVar(
                   0.0, remaining_cap, penalty * e->cost_, GRB_INTEGER,
-                  "T_" + std::to_string(e->from_->id_) + "_" +
-                      std::to_string(e->to_->id_) + "_" + std::to_string(i)));
+                  "T_" + std::to_string(e->from_->station_) + "_" +
+                      std::to_string(e->to_->station_) + "_" +
+                      std::to_string(e->from_->time_) + "_" +
+                      std::to_string(e->to_->time_) + "_" +
+                      std::to_string(e->trip_->id_.primary_.train_nr_) + "_" +
+                      std::to_string(i) + "_" + std::to_string(curr_var_nr++)));
             }
             break;
           }
@@ -69,8 +77,11 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
               if (remaining_cap == 0) continue;
               edge_cost_vars[e.get()].push_back(model.addVar(
                   0.0, remaining_cap, penalty * e->cost_, GRB_INTEGER,
-                  "WT_" + std::to_string(e->from_->id_) + "_" +
-                      std::to_string(e->to_->id_) + "_" + std::to_string(i)));
+                  "W_" + std::to_string(e->from_->station_) + "_" +
+                      std::to_string(e->to_->station_) + "_" +
+                      std::to_string(e->from_->time_) + "_" +
+                      std::to_string(e->to_->time_) + "_" + std::to_string(i) +
+                      "_" + std::to_string(curr_var_nr++)));
             }
             break;
           }
@@ -78,37 +89,50 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
             edge_cost_vars[e.get()].push_back(model.addVar(
                 0.0, std::numeric_limits<double>::max(),
                 tt_config.transfer_penalty_ + e->cost_, GRB_INTEGER,
-                "ENTR_" + std::to_string(e->from_->id_) + "_" +
-                    std::to_string(e->to_->id_)));
+                "ENTR_" + std::to_string(e->from_->station_) + "_" +
+                    std::to_string(e->to_->station_) + "_" +
+                    std::to_string(e->from_->time_) + "_" +
+                    std::to_string(e->to_->time_) + "_" +
+                    std::to_string(curr_var_nr++)));
             break;
           }
           case eg_edge_type::NO_ROUTE: {
             edge_cost_vars[e.get()].push_back(
                 model.addVar(0.0, std::numeric_limits<double>::max(),
                              tt_config.no_route_cost_, GRB_INTEGER,
-                             "NR_" + std::to_string(e->from_->id_) + "_" +
-                                 std::to_string(e->to_->id_)));
+                             "NR_" + std::to_string(e->from_->station_) + "_" +
+                                 std::to_string(e->to_->station_) + "_" +
+                                 std::to_string(curr_var_nr++)));
             break;
           }
           case eg_edge_type::WAIT_STATION: {
             edge_cost_vars[e.get()].push_back(model.addVar(
                 0.0, std::numeric_limits<double>::max(), e->cost_, GRB_INTEGER,
-                "WS_" + std::to_string(e->from_->id_) + "_" +
-                    std::to_string(e->to_->id_)));
+                "WS_" + std::to_string(e->from_->station_) + "_" +
+                    std::to_string(e->to_->station_) + "_" +
+                    std::to_string(e->from_->time_) + "_" +
+                    std::to_string(e->to_->time_) + "_" +
+                    std::to_string(curr_var_nr++)));
             break;
           }
           case eg_edge_type::FINISH: {
             edge_cost_vars[e.get()].push_back(model.addVar(
                 0.0, std::numeric_limits<double>::max(), e->cost_, GRB_INTEGER,
-                "FIN_" + std::to_string(e->from_->id_) + "_" +
-                    std::to_string(e->to_->id_)));
+                "FIN_" + std::to_string(e->from_->station_) + "_" +
+                    std::to_string(e->to_->station_) + "_" +
+                    std::to_string(e->from_->time_) + "_" +
+                    std::to_string(e->to_->time_) + "_" +
+                    std::to_string(curr_var_nr++)));
             break;
           }
           case eg_edge_type::TRAIN_EXIT: {
             edge_cost_vars[e.get()].push_back(model.addVar(
                 0.0, std::numeric_limits<double>::max(), e->cost_, GRB_INTEGER,
-                "EXIT_" + std::to_string(e->from_->id_) + "_" +
-                    std::to_string(e->to_->id_)));
+                "EXIT_" + std::to_string(e->from_->station_) + "_" +
+                    std::to_string(e->to_->station_) + "_" +
+                    std::to_string(e->from_->time_) + "_" +
+                    std::to_string(e->to_->time_) + "_" +
+                    std::to_string(curr_var_nr++)));
             break;
           }
         }
@@ -142,7 +166,8 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
                 0.0, 1.0, 0.0, GRB_BINARY,
                 std::to_string(i) + "_" + eg_edge_type_to_string(e.get()) +
                     "_" + std::to_string(e->from_->id_) + "_" +
-                    std::to_string(e->to_->id_));
+                    std::to_string(e->to_->id_) + "_" +
+                    std::to_string(curr_var_nr++));
           }
         }
       }
@@ -238,6 +263,17 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     int status = model.get(GRB_IntAttr_Status);
     if (status != GRB_OPTIMAL) {
       throw std::runtime_error("node-arc-form ILP model: solution not optimal");
+    }
+
+    for (auto const& ecv : edge_cost_vars) {
+      for (auto const& curr_ecv : ecv.second) {
+        variables_with_values[curr_ecv.get(GRB_StringAttr_VarName)] =
+            std::make_tuple(curr_ecv.get(GRB_DoubleAttr_X),
+                            curr_ecv.get(GRB_DoubleAttr_Obj),
+                            curr_ecv.get(GRB_DoubleAttr_X) *
+                                curr_ecv.get(GRB_DoubleAttr_Obj),
+                            curr_ecv.get(GRB_DoubleAttr_UB));
+      }
     }
 
     std::vector<std::vector<eg_edge*>> solution(psg_groups.size());

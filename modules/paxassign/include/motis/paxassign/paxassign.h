@@ -31,7 +31,9 @@ private:
   void on_monitor(const motis::module::msg_ptr& msg);
   void cap_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-      paxmon_data& data, schedule const& sched);
+      paxmon_data& data, schedule const& sched,
+      std::map<std::string, std::tuple<double, double, double, double>>&
+          variables_with_values);
   void node_arc_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched);

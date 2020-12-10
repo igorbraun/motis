@@ -34,6 +34,8 @@ cap_ILP_solution build_ILP_from_scenario_API(
     env.start();
     GRBModel model = GRBModel(env);
 
+    uint64_t curr_var_nr = 0;
+
     // EDGE VARIABLES
     std::map<cap_ILP_edge*, std::vector<GRBVar>> edge_cost_vars;
     for (auto const& e : handled_edges) {
@@ -64,7 +66,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
                     std::to_string(e->from_->time_) + "_" +
                     std::to_string(e->to_->time_) + "_" +
                     std::to_string(e->trip_->id_.primary_.train_nr_) + "_" +
-                    std::to_string(i)));
+                    std::to_string(i) + "_" + std::to_string(curr_var_nr++)));
           }
           break;
         }
@@ -92,7 +94,8 @@ cap_ILP_solution build_ILP_from_scenario_API(
                 "W_" + std::to_string(e->from_->station_) + "_" +
                     std::to_string(e->to_->station_) + "_" +
                     std::to_string(e->from_->time_) + "_" +
-                    std::to_string(e->to_->time_) + "_" + std::to_string(i)));
+                    std::to_string(e->to_->time_) + "_" + std::to_string(i) +
+                    "_" + std::to_string(curr_var_nr++)));
           }
           break;
         }
@@ -103,13 +106,14 @@ cap_ILP_solution build_ILP_from_scenario_API(
                            "I_" + std::to_string(e->from_->station_) + "_" +
                                std::to_string(e->to_->station_) + "_" +
                                std::to_string(e->from_->time_) + "_" +
-                               std::to_string(e->to_->time_)));
+                               std::to_string(e->to_->time_) + "_" +
+                               std::to_string(curr_var_nr++)));
           break;
         }
         case edge_type::NOROUTE: {
-          edge_cost_vars[e].push_back(
-              model.addVar(0.0, std::numeric_limits<double>::max(),
-                           config.no_route_cost_, GRB_INTEGER, "NOROUTE"));
+          edge_cost_vars[e].push_back(model.addVar(
+              0.0, std::numeric_limits<double>::max(), config.no_route_cost_,
+              GRB_INTEGER, "NOROUTE_" + std::to_string(curr_var_nr++)));
           break;
         }
       }
