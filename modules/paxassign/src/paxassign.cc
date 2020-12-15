@@ -123,13 +123,20 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
                                                   localization,
                                                   {pg},
                                                   {}});
-      if (curr_id == 3) break;
     } else {
       cpg->passengers_ += pg->passengers_;
       cpg->groups_.push_back(pg);
     }
   }
 
+  std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      std::cout << cgs.first << ", " << cpg.localization_.at_station_->index_
+                << ", psgrs: " << cpg.passengers_ << std::endl;
+    }
+  }
+  
   if (combined_groups.empty()) {
     return;
   }
@@ -443,6 +450,10 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
                        [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
                          return p.first == cpg.id_;
                        });
+      if (cpg.alternatives_.size() == asg->second) {
+        std::cout << "NO ROUTE" << std::endl;
+        continue;
+      }
       for (auto const& l :
            cpg.alternatives_[asg->second].compact_journey_.legs_) {
         auto tr_data = data.graph_.trip_data_.find(l.trip_);
@@ -559,6 +570,11 @@ void paxassign::node_arc_ilp_assignment(
                        [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
                          return p.first == cpg.id_;
                        });
+
+      if (cpg.alternatives_.size() == asg->second) {
+        std::cout << "NO ROUTE" << std::endl;
+        continue;
+      }
 
       auto eg_psg_g = std::find_if(
           eg_psg_groups.begin(), eg_psg_groups.end(),
