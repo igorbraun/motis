@@ -123,8 +123,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
                                                   localization,
                                                   {pg},
                                                   {}});
-	node_arc_ilp_assignment(combined_groups, data, sched);
- } else {
+      if (curr_id == 3) break;
+    } else {
       cpg->passengers_ += pg->passengers_;
       cpg->groups_.push_back(pg);
     }
@@ -136,12 +136,12 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
 
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
-  //cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  //node_arc_ilp_assignment(combined_groups, data, sched);
-  //heuristic_assignments(combined_groups, data, sched);
+  // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
+  node_arc_ilp_assignment(combined_groups, data, sched);
+  // heuristic_assignments(combined_groups, data, sched);
 }
 
-void paxassign::cap_ilp_assignment(
+std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched,
     std::map<std::string, std::tuple<double, double, double, double>>&
@@ -204,7 +204,7 @@ void paxassign::cap_ilp_assignment(
                              cpg.groups_.back()->planned_arrival_time_
                       << std::endl;
             ++curr_alt_ind;
-	  }
+          }
         }
       }
     }
@@ -422,14 +422,54 @@ void paxassign::cap_ilp_assignment(
   std::cout << "manually calculated perc_tt of halle ILP : " << final_obj
             << std::endl;
 
- // print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
+  // print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
 
-  print_solution_routes_halle(cap_ILP_scenario, sol.alt_to_use_, sched);
+  // print_solution_routes_halle(cap_ILP_scenario, sol.alt_to_use_, sched);
 
-  std::cout << "HALLE APPROACH. Passengers in scenario INPUT : " << psgs_in_sc
-            << ", OUTPUT assignments : " << sol.alt_to_use_.size() << std::endl;
+  // std::cout << "HALLE APPROACH. Passengers in scenario INPUT : " <<
+  // psgs_in_sc
+  //          << ", OUTPUT assignments : " << sol.alt_to_use_.size() <<
+  //          std::endl;
 
-  //throw std::runtime_error("time expanded graph is built");
+  std::cout << " ------------------------------ HALLE EDGE ANALYSIS: "
+               "------------------------------ "
+            << std::endl;
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      std::cout << "SELECTED ALTERNATIVE FOR " << cpg.id_
+                << " with psgs: " << cpg.passengers_ << std::endl;
+      auto asg =
+          std::find_if(sol.alt_to_use_.begin(), sol.alt_to_use_.end(),
+                       [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
+                         return p.first == cpg.id_;
+                       });
+      for (auto const& l :
+           cpg.alternatives_[asg->second].compact_journey_.legs_) {
+        auto tr_data = data.graph_.trip_data_.find(l.trip_);
+        auto entry_edge = std::find_if(
+            tr_data->second->edges_.begin(), tr_data->second->edges_.end(),
+            [&l](motis::paxmon::edge const* e) {
+              return e->from_->station_ == l.enter_station_id_;
+            });
+        auto exit_edge = std::find_if(
+            tr_data->second->edges_.begin(), tr_data->second->edges_.end(),
+            [&l](motis::paxmon::edge const* e) {
+              return e->to_->station_ == l.exit_station_id_;
+            });
+        std::cout << "train: " << l.trip_->id_.primary_.train_nr_ << std::endl;
+        for (auto it = entry_edge;; ++it) {
+          std::cout << "from " << sched.stations_[(*it)->from_->station_]->name_
+                    << " to " << sched.stations_[(*it)->to_->station_]->name_
+                    << ", " << (*it)->passengers() << " / " << (*it)->capacity()
+                    << std::endl;
+          if (it == exit_edge) break;
+        }
+      }
+    }
+  }
+  return sol.alt_to_use_;
+
+  // throw std::runtime_error("time expanded graph is built");
 
   /* TODO: for future evaluation
   std::ofstream stats_file;
@@ -477,7 +517,9 @@ void paxassign::node_arc_ilp_assignment(
     paxmon_data& data, schedule const& sched) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
-  cap_ilp_assignment(combined_groups, data, sched, variables_with_values_halle);
+
+  auto alts_to_use = cap_ilp_assignment(combined_groups, data, sched,
+                                        variables_with_values_halle);
 
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
@@ -502,10 +544,48 @@ void paxassign::node_arc_ilp_assignment(
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
   print_solution_routes_node_arc(solution, eg_psg_groups, sched);
 
+  std::cout << " ------------------------------ NODE ARC EDGE ANALYSIS: "
+               "------------------------------ "
+            << std::endl;
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      std::cout << "SELECTED ALTERNATIVE FOR " << cpg.id_
+                << " with psgs: " << cpg.passengers_ << std::endl;
+      auto asg =
+          std::find_if(alts_to_use.begin(), alts_to_use.end(),
+                       [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
+                         return p.first == cpg.id_;
+                       });
+      for (auto const& l :
+           cpg.alternatives_[asg->second].compact_journey_.legs_) {
+        auto tr_data = te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
+        auto entry_edge =
+            std::find_if(tr_data->second->edges_.begin(),
+                         tr_data->second->edges_.end(), [&l](eg_edge* e) {
+                           return e->from_->station_ == l.enter_station_id_;
+                         });
+        auto exit_edge =
+            std::find_if(tr_data->second->edges_.begin(),
+                         tr_data->second->edges_.end(), [&l](eg_edge* e) {
+                           return e->to_->station_ == l.exit_station_id_;
+                         });
+        std::cout << "train: " << l.trip_->id_.primary_.train_nr_ << std::endl;
+        for (auto it = entry_edge;; ++it) {
+          std::cout << "from " << sched.stations_[(*it)->from_->station_]->name_
+                    << " to " << sched.stations_[(*it)->to_->station_]->name_
+                    << ", " << (*it)->passengers_ << " / "
+                    << (*it)->soft_cap_boundary_ << std::endl;
+          if (it == exit_edge) break;
+        }
+      }
+    }
+  }
+
+  /*
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
             << psgs_in_sc << ", OUTPUT assignments : " << solution.size()
             << std::endl;
-  /*
+
     std::cout << "HALLE APPROACH: " << std::endl;
     for (auto const& var_halle : variables_with_values_halle) {
       std::cout << var_halle.first << ": val: " << std::get<0>(var_halle.second)
@@ -522,7 +602,7 @@ void paxassign::node_arc_ilp_assignment(
     }
     */
 
-  //throw std::runtime_error("time expanded graph is built");
+  throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(

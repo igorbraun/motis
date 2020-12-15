@@ -51,7 +51,7 @@ struct cap_ILP_stats {
   double obj_;
 };
 
-using alt_idx = uint32_t;
+using alt_idx = std::uint16_t;
 
 struct cap_ILP_solution {
   cap_ILP_stats stats_;
