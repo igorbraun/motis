@@ -72,11 +72,10 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
 
   // TIME FILTER
   auto latest_allowed_time = std::min<uint16_t>(
-      psg_group.cpg_.groups_[0]
-              ->compact_planned_journey_.legs_.back()
-              .exit_time_ +
+      psg_group.cpg_.groups_.back()->planned_arrival_time_ +
           config.allowed_delay_,
       unix_to_motistime(sched, module::get_schedule().schedule_end_));
+
   for (auto i = 0u; i < te_graph.nodes_.size(); ++i) {
     if (te_graph.nodes_[i]->id_ == psg_group.to_->id_ ||
         te_graph.nodes_[i]->id_ == psg_group.from_->id_)

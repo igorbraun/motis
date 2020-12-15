@@ -134,9 +134,17 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     for (auto& cpg : cgs.second) {
       std::cout << cgs.first << ", " << cpg.localization_.at_station_->index_
                 << ", psgrs: " << cpg.passengers_ << std::endl;
+
+      std::cout << sched.stations_[cgs.first]->name_ << " to "
+                << sched.stations_[cpg.localization_.at_station_->index_]->name_
+                << ", psgrs: " << cpg.passengers_ << std::endl;
     }
   }
-  
+
+  std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
+  auto& g = selected_combined_groups[65019];
+  g.push_back(combined_pg{combined_groups[65019][0]});
+
   if (combined_groups.empty()) {
     return;
   }
@@ -144,7 +152,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  node_arc_ilp_assignment(combined_groups, data, sched);
+  node_arc_ilp_assignment(selected_combined_groups, data, sched);
   // heuristic_assignments(combined_groups, data, sched);
 }
 
@@ -562,9 +570,10 @@ void paxassign::node_arc_ilp_assignment(
             << std::endl;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
-      if (cpg.id_ != 3) continue;
+      //if (cpg.id_ != 3) continue;
       std::cout << "SELECTED ALTERNATIVE FOR " << cpg.id_
-                << " with psgs: " << cpg.passengers_ << std::endl;
+                << " with psgs: " << cpg.passengers_ << ", planned arr time: "
+                << cpg.groups_.back()->planned_arrival_time_ << std::endl;
       auto asg =
           std::find_if(alts_to_use.begin(), alts_to_use.end(),
                        [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
@@ -583,8 +592,10 @@ void paxassign::node_arc_ilp_assignment(
       std::vector<bool> nodes_validity =
           reduce_te_graph((*eg_psg_g), te_graph, reduction_config, sched);
 
-      for (auto const& l :
-           cpg.alternatives_[asg->second].compact_journey_.legs_) {
+	for(auto const& alt : cpg.alternatives_){
+	std::cout << "NEW ALTERNATIVE" << std::endl;
+        for (auto const& l :
+           alt.compact_journey_.legs_) {
         auto tr_data = te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
         auto entry_edge =
             std::find_if(tr_data->second->edges_.begin(),
@@ -599,13 +610,15 @@ void paxassign::node_arc_ilp_assignment(
         std::cout << "train: " << l.trip_->id_.primary_.train_nr_ << std::endl;
         for (auto it = entry_edge;; ++it) {
           std::cout << "from " << sched.stations_[(*it)->from_->station_]->name_
-                    << " (" << nodes_validity[(*it)->from_->id_] << ") to "
+                    << " (" << nodes_validity[(*it)->from_->id_]
+                    << ") time: " << (*it)->from_->time_ << " to "
                     << sched.stations_[(*it)->to_->station_]->name_ << " ("
-                    << nodes_validity[(*it)->to_->id_] << "), "
-                    << (*it)->passengers_ << " / " << (*it)->soft_cap_boundary_
-                    << std::endl;
+                    << nodes_validity[(*it)->to_->id_]
+                    << ") time: " << (*it)->to_->time_
+                    << ", psgrs: " << (*it)->passengers_ << " / "
+                    << (*it)->soft_cap_boundary_ << std::endl;
           if (it == exit_edge) break;
-        }
+       }}
       }
     }
   }
