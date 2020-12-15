@@ -64,7 +64,7 @@ void filter_nodes(std::vector<bool>& nodes_validity, std::vector<T> const& dist,
   }
 }
 
-std::vector<bool> reduce_te_graph(eg_psg_group& psg_group,
+std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
                                   time_expanded_graph const& te_graph,
                                   config_graph_reduction const& config,
                                   schedule const& sched) {
@@ -77,10 +77,12 @@ std::vector<bool> reduce_te_graph(eg_psg_group& psg_group,
               .exit_time_ +
           config.allowed_delay_,
       unix_to_motistime(sched, module::get_schedule().schedule_end_));
-  for (auto i = 0u; i < nodes_validity.size(); ++i) {
-    if (i == psg_group.to_->id_ || i == psg_group.from_->id_) continue;
+  for (auto i = 0u; i < te_graph.nodes_.size(); ++i) {
+    if (te_graph.nodes_[i]->id_ == psg_group.to_->id_ ||
+        te_graph.nodes_[i]->id_ == psg_group.from_->id_)
+      continue;
     if (te_graph.nodes_[i]->time_ > latest_allowed_time) {
-      nodes_validity[i] = false;
+      nodes_validity[te_graph.nodes_[i]->id_] = false;
     }
   }
 

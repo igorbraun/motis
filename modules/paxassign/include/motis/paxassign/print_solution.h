@@ -28,10 +28,11 @@ void print_solution_routes_halle(
     std::vector<std::pair<ilp_psg_id, alt_idx>> const& alt_to_use,
     schedule const& sched) {
   for (auto& assignment : alt_to_use) {
-    auto cpg = std::find_if(cap_ilp_psg_groups.begin(), cap_ilp_psg_groups.end(),
-                 [&assignment](cap_ILP_psg_group const& curr_gr) {
-                   return curr_gr.id_ == assignment.first;
-                 });
+    auto cpg =
+        std::find_if(cap_ilp_psg_groups.begin(), cap_ilp_psg_groups.end(),
+                     [&assignment](cap_ILP_psg_group const& curr_gr) {
+                       return curr_gr.id_ == assignment.first;
+                     });
     assert(cpg != cap_ilp_psg_groups.end());
 
     if (cpg->alternatives_.size() <= assignment.second) {
@@ -42,7 +43,7 @@ void print_solution_routes_halle(
                 << cpg->psg_count_ << " passengers:" << std::endl;
       for (auto const& e : cpg->alternatives_[assignment.second].edges_) {
         std::string trp = "-";
-        if(e->trip_){
+        if (e->trip_) {
           trp = std::to_string(e->trip_->id_.primary_.train_nr_);
         }
         std::cout << "  train " << trp << " type " << e->type_ << " from "
@@ -56,11 +57,14 @@ void print_solution_routes_halle(
   }
 }
 
-
 void print_solution_routes_node_arc(
     std::vector<std::vector<eg_edge*>> const& solution,
-    std::vector<eg_psg_group> const& eg_psg_groups, schedule const& sched) {
+    std::vector<eg_psg_group> const& eg_psg_groups, schedule const& sched,
+    time_expanded_graph const& te_graph) {
+  config_graph_reduction reduction_config;
   for (auto i = 0u; i < solution.size(); ++i) {
+    std::vector<bool> nodes_validity =
+        reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
     std::cout << "Psg ID: " << eg_psg_groups[i].cpg_.id_
               << " psg count: " << eg_psg_groups[i].psg_count_
               << " edges : " << std::endl;
@@ -69,11 +73,11 @@ void print_solution_routes_node_arc(
                      ? "-"
                      : std::to_string(e->trip_->id_.primary_.train_nr_);
       std::cout << "  train " << trp << " type " << e->type_ << " from "
-                << sched.stations_[e->from_->station_]->name_ << " to "
-                << sched.stations_[e->to_->station_]->name_ << " at "
-                << format_time(e->from_->time_) << " - "
-                << format_time(e->to_->time_) << " cost " << e->cost_
-                << std::endl;
+                << sched.stations_[e->from_->station_]->name_ << " ("
+                << nodes_validity[e->from_->id_] << ") to "
+                << sched.stations_[e->to_->station_]->name_ << " ("
+                << nodes_validity[e->to_->id_] << ") at " << e->from_->time_
+                << " - " << e->to_->time_ << " cost " << e->cost_ << std::endl;
     }
     std::cout << "route cost: "
               << calc_perc_tt(solution[i], perceived_tt_config{}) << std::endl;

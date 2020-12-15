@@ -458,10 +458,12 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
             });
         std::cout << "train: " << l.trip_->id_.primary_.train_nr_ << std::endl;
         for (auto it = entry_edge;; ++it) {
+          auto cap = (*it)->has_capacity()
+                         ? (*it)->capacity()
+                         : std::numeric_limits<std::uint64_t>::max();
           std::cout << "from " << sched.stations_[(*it)->from_->station_]->name_
                     << " to " << sched.stations_[(*it)->to_->station_]->name_
-                    << ", " << (*it)->passengers() << " / " << (*it)->capacity()
-                    << std::endl;
+                    << ", " << (*it)->passengers() << " / " << cap << std::endl;
           if (it == exit_edge) break;
         }
       }
@@ -542,13 +544,14 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
-  print_solution_routes_node_arc(solution, eg_psg_groups, sched);
+  print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
   std::cout << " ------------------------------ NODE ARC EDGE ANALYSIS: "
                "------------------------------ "
             << std::endl;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
+      if (cpg.id_ != 3) continue;
       std::cout << "SELECTED ALTERNATIVE FOR " << cpg.id_
                 << " with psgs: " << cpg.passengers_ << std::endl;
       auto asg =
@@ -556,6 +559,14 @@ void paxassign::node_arc_ilp_assignment(
                        [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
                          return p.first == cpg.id_;
                        });
+
+      auto eg_psg_g = std::find_if(
+          eg_psg_groups.begin(), eg_psg_groups.end(),
+          [&](eg_psg_group const& pg) { return pg.cpg_.id_ == cpg.id_; });
+      config_graph_reduction reduction_config;
+      std::vector<bool> nodes_validity =
+          reduce_te_graph((*eg_psg_g), te_graph, reduction_config, sched);
+
       for (auto const& l :
            cpg.alternatives_[asg->second].compact_journey_.legs_) {
         auto tr_data = te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
@@ -572,9 +583,11 @@ void paxassign::node_arc_ilp_assignment(
         std::cout << "train: " << l.trip_->id_.primary_.train_nr_ << std::endl;
         for (auto it = entry_edge;; ++it) {
           std::cout << "from " << sched.stations_[(*it)->from_->station_]->name_
-                    << " to " << sched.stations_[(*it)->to_->station_]->name_
-                    << ", " << (*it)->passengers_ << " / "
-                    << (*it)->soft_cap_boundary_ << std::endl;
+                    << " (" << nodes_validity[(*it)->from_->id_] << ") to "
+                    << sched.stations_[(*it)->to_->station_]->name_ << " ("
+                    << nodes_validity[(*it)->to_->id_] << "), "
+                    << (*it)->passengers_ << " / " << (*it)->soft_cap_boundary_
+                    << std::endl;
           if (it == exit_edge) break;
         }
       }
