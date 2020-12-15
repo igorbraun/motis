@@ -149,8 +149,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
           "reduce te graph for passengers"};
       config_graph_reduction reduction_config;
       for (auto i = 0u; i < psg_groups.size(); ++i) {
-        nodes_validity[i] =
-            reduce_te_graph(psg_groups[i], te_graph, reduction_config, sched);
+        nodes_validity[i] =  reduce_te_graph(psg_groups[i], te_graph, reduction_config, sched);
       }
     }
 
@@ -234,6 +233,8 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
       }
     }
 
+    {
+     logging::scoped_timer capacity_cost_timer{"capacity + cost constraints"};
     // capacity and cost
     for (auto const& n : te_graph.nodes_) {
       for (auto const& e : n->out_edges_) {
@@ -255,6 +256,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
           model.addConstr(lhs, GRB_EQUAL, 0.0);
         }
       }
+    }
     }
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
@@ -298,7 +300,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
                 });
     }
 
-    model.write("motis/build/rel/ilp_files/node_arc.sol");
+    //model.write("motis/build/rel/ilp_files/node_arc.sol");
     // model.write("motis/build/rel/ilp_files/node_arc.lp");
     return solution;
   } catch (GRBException e) {

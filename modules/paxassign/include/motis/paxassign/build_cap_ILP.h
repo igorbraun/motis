@@ -194,7 +194,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
     model.optimize();
 
     // model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
-    model.write("motis/build/rel/ilp_files/halle.sol");
+    // model.write("motis/build/rel/ilp_files/halle.sol");
 
     int status = model.get(GRB_IntAttr_Status);
     if (status != GRB_OPTIMAL) {
@@ -217,6 +217,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
         ++i;
       }
     }
+
 
     for (auto const& arv : alt_route_vars) {
       for (auto const& curr_arv : arv) {

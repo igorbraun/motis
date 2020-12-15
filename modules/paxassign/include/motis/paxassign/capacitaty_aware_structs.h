@@ -4,6 +4,16 @@ namespace motis::paxassign {
 
 enum class edge_type : std::uint8_t { TRIP, INTERCHANGE, WAIT, NOROUTE };
 
+inline std::ostream& operator<<(std::ostream& o, edge_type const t) {
+  switch (t) {
+    case edge_type::TRIP: return o << "TRIP";
+    case edge_type::INTERCHANGE: return o << "INTERCHANGE";
+    case edge_type::WAIT: return o << "WAIT";
+    case edge_type::NOROUTE: return o << "NOROUTE"; 
+  }
+  return o;
+}
+
 // from time; to time; from station; to station; train_nr
 
 struct cap_ILP_edge {

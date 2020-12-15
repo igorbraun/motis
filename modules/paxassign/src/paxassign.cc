@@ -123,7 +123,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
                                                   localization,
                                                   {pg},
                                                   {}});
-    } else {
+	node_arc_ilp_assignment(combined_groups, data, sched);
+ } else {
       cpg->passengers_ += pg->passengers_;
       cpg->groups_.push_back(pg);
     }
@@ -133,9 +134,11 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  // cap_ilp_assignment(combined_groups, data, sched);
-  node_arc_ilp_assignment(combined_groups, data, sched);
-  heuristic_assignments(combined_groups, data, sched);
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values;
+  //cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
+  //node_arc_ilp_assignment(combined_groups, data, sched);
+  //heuristic_assignments(combined_groups, data, sched);
 }
 
 void paxassign::cap_ilp_assignment(
@@ -189,8 +192,19 @@ void paxassign::cap_ilp_assignment(
           if (remove_alt) {
             cpg.alternatives_.erase(cpg.alternatives_.begin() + curr_alt_ind);
           } else {
+            std::cout << cpg.id_ << ", planned arrival time: "
+                      << cpg.groups_.back()->planned_arrival_time_ << " vs "
+                      << cpg.alternatives_[curr_alt_ind]
+                             .compact_journey_.legs_.back()
+                             .exit_time_
+                      << ", difference: "
+                      << cpg.alternatives_[curr_alt_ind]
+                                 .compact_journey_.legs_.back()
+                                 .exit_time_ -
+                             cpg.groups_.back()->planned_arrival_time_
+                      << std::endl;
             ++curr_alt_ind;
-          }
+	  }
         }
       }
     }
@@ -408,12 +422,14 @@ void paxassign::cap_ilp_assignment(
   std::cout << "manually calculated perc_tt of halle ILP : " << final_obj
             << std::endl;
 
-  print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
+ // print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
+
+  print_solution_routes_halle(cap_ILP_scenario, sol.alt_to_use_, sched);
 
   std::cout << "HALLE APPROACH. Passengers in scenario INPUT : " << psgs_in_sc
             << ", OUTPUT assignments : " << sol.alt_to_use_.size() << std::endl;
 
-  // throw std::runtime_error("time expanded graph is built");
+  //throw std::runtime_error("time expanded graph is built");
 
   /* TODO: for future evaluation
   std::ofstream stats_file;
@@ -506,7 +522,7 @@ void paxassign::node_arc_ilp_assignment(
     }
     */
 
-  throw std::runtime_error("time expanded graph is built");
+  //throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(

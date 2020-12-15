@@ -27,7 +27,7 @@ inline std::ostream& operator<<(std::ostream& out,
 
 struct config_graph_reduction {
   uint16_t max_interchanges_{6};
-  uint16_t allowed_delay_{300};
+  uint16_t allowed_delay_{121};
   double max_cap_utilization_{1.2};
   std::map<service_class, transport_category> class_to_cat_{
       {service_class::AIR, transport_category::LONG_DIST},
@@ -84,6 +84,7 @@ std::vector<bool> reduce_te_graph(eg_psg_group& psg_group,
     }
   }
 
+  return nodes_validity;
   // INTERCHANGE FILTER
   {
     logging::scoped_timer interchanges_filter{"interchanges filter"};
