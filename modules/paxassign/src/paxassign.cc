@@ -190,6 +190,12 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
     scoped_timer alt_trips_timer{"add alternatives to graph"};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
+        for (auto const& grp : cpg.groups_) {
+          std::cout << "paxmon::passenger_group.id_ : " << grp->id_
+                    << ", source primary ref: " << grp->source_.primary_ref_
+                    << ", source secondary ref: " << grp->source_.secondary_ref_
+                    << std::endl;
+        }
         size_t curr_alt_ind = 0;
         while (curr_alt_ind < cpg.alternatives_.size()) {
           bool remove_alt = false;
@@ -207,7 +213,7 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
           if (remove_alt) {
             cpg.alternatives_.erase(cpg.alternatives_.begin() + curr_alt_ind);
           } else {
-            std::cout << cpg.id_ << ", planned arrival time: "
+            std::cout << "cpg.id_: " << cpg.id_ << ", planned arrival time: "
                       << cpg.groups_.back()->planned_arrival_time_ << " vs "
                       << cpg.alternatives_[curr_alt_ind]
                              .compact_journey_.legs_.back()
@@ -224,6 +230,7 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
       }
     }
   }
+  throw std::runtime_error("check the outputs");
 
   {
     scoped_timer alt_inchs_timer{"add interchanges to graph"};
@@ -570,7 +577,7 @@ void paxassign::node_arc_ilp_assignment(
             << std::endl;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
-      //if (cpg.id_ != 3) continue;
+      // if (cpg.id_ != 3) continue;
       std::cout << "SELECTED ALTERNATIVE FOR " << cpg.id_
                 << " with psgs: " << cpg.passengers_ << ", planned arr time: "
                 << cpg.groups_.back()->planned_arrival_time_ << std::endl;
@@ -592,33 +599,36 @@ void paxassign::node_arc_ilp_assignment(
       std::vector<bool> nodes_validity =
           reduce_te_graph((*eg_psg_g), te_graph, reduction_config, sched);
 
-	for(auto const& alt : cpg.alternatives_){
-	std::cout << "NEW ALTERNATIVE" << std::endl;
-        for (auto const& l :
-           alt.compact_journey_.legs_) {
-        auto tr_data = te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
-        auto entry_edge =
-            std::find_if(tr_data->second->edges_.begin(),
-                         tr_data->second->edges_.end(), [&l](eg_edge* e) {
-                           return e->from_->station_ == l.enter_station_id_;
-                         });
-        auto exit_edge =
-            std::find_if(tr_data->second->edges_.begin(),
-                         tr_data->second->edges_.end(), [&l](eg_edge* e) {
-                           return e->to_->station_ == l.exit_station_id_;
-                         });
-        std::cout << "train: " << l.trip_->id_.primary_.train_nr_ << std::endl;
-        for (auto it = entry_edge;; ++it) {
-          std::cout << "from " << sched.stations_[(*it)->from_->station_]->name_
-                    << " (" << nodes_validity[(*it)->from_->id_]
-                    << ") time: " << (*it)->from_->time_ << " to "
-                    << sched.stations_[(*it)->to_->station_]->name_ << " ("
-                    << nodes_validity[(*it)->to_->id_]
-                    << ") time: " << (*it)->to_->time_
-                    << ", psgrs: " << (*it)->passengers_ << " / "
-                    << (*it)->soft_cap_boundary_ << std::endl;
-          if (it == exit_edge) break;
-       }}
+      for (auto const& alt : cpg.alternatives_) {
+        std::cout << "NEW ALTERNATIVE" << std::endl;
+        for (auto const& l : alt.compact_journey_.legs_) {
+          auto tr_data =
+              te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
+          auto entry_edge =
+              std::find_if(tr_data->second->edges_.begin(),
+                           tr_data->second->edges_.end(), [&l](eg_edge* e) {
+                             return e->from_->station_ == l.enter_station_id_;
+                           });
+          auto exit_edge =
+              std::find_if(tr_data->second->edges_.begin(),
+                           tr_data->second->edges_.end(), [&l](eg_edge* e) {
+                             return e->to_->station_ == l.exit_station_id_;
+                           });
+          std::cout << "train: " << l.trip_->id_.primary_.train_nr_
+                    << std::endl;
+          for (auto it = entry_edge;; ++it) {
+            std::cout << "from "
+                      << sched.stations_[(*it)->from_->station_]->name_ << " ("
+                      << nodes_validity[(*it)->from_->id_]
+                      << ") time: " << (*it)->from_->time_ << " to "
+                      << sched.stations_[(*it)->to_->station_]->name_ << " ("
+                      << nodes_validity[(*it)->to_->id_]
+                      << ") time: " << (*it)->to_->time_
+                      << ", psgrs: " << (*it)->passengers_ << " / "
+                      << (*it)->soft_cap_boundary_ << std::endl;
+            if (it == exit_edge) break;
+          }
+        }
       }
     }
   }
