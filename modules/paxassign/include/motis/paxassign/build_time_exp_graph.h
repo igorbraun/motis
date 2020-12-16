@@ -258,11 +258,42 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
             .get();
     te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].push_back(
         psg_localization_node);
-
+    /*
+        std::cout << "ALL NODES AT ST:" << std::endl;
+        for (auto const& n :
+       te_graph.st_to_nodes_[cpg.localization_.at_station_->index_]) { std::cout
+       << n->time_ << ", " << n->type_ << std::endl;
+        }
+        std::vector<eg_event_node*> debug_rel_nodes;
+        std::copy_if(
+            te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].begin(),
+            te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].end(),
+            std::back_inserter(debug_rel_nodes), [&cpg](eg_event_node const* n)
+       { return n->type_ == eg_event_type::WAIT && n->time_ >=
+       cpg.localization_.current_arrival_time_;
+            });
+        std::cout << "PSG ARR TIME: " << cpg.localization_.current_arrival_time_
+       << std::endl; std::cout << "DEBUG_REL_NODES SIZE: " <<
+       debug_rel_nodes.size()
+                  << std::endl;
+        std::cout << "UNSORTED: " << std::endl;
+        for (auto const& n : debug_rel_nodes) {
+          std::cout << n->time_ << ", " << n->type_ << std::endl;
+        }
+        std::sort(std::begin(debug_rel_nodes), std::end(debug_rel_nodes),
+                  [](eg_event_node const* lhs, eg_event_node const* rhs) {
+                    return lhs->time_ < rhs->time_;
+                  });
+        std::cout << "SORTED: " << std::endl;
+        for (auto const& n : debug_rel_nodes) {
+          std::cout << n->time_ << ", " << n->type_ << std::endl;
+        }
+    */
     std::vector<eg_event_node*> relevant_nodes =
         utl::all(te_graph.st_to_nodes_[cpg.localization_.at_station_->index_]) |
         utl::remove_if([&](auto const& n) {
-          return n->type_ != eg_event_type::WAIT ||
+          return n == psg_localization_node ||
+                 n->type_ != eg_event_type::WAIT ||
                  n->time_ < cpg.localization_.current_arrival_time_;
         }) |
         utl::vec();
@@ -273,6 +304,12 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                 [](eg_event_node const* lhs, eg_event_node const* rhs) {
                   return lhs->time_ < rhs->time_;
                 });
+      /*
+      std::cout << "ORIGINAL REL NODES: " << std::endl;
+      for(auto const& n : relevant_nodes){
+        std::cout << n->time_ << ", " << n->type_ << std::endl;
+      }
+       */
       te_graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
           psg_localization_node, relevant_nodes[0], eg_edge_type::WAIT_STATION,
           relevant_nodes[0]->time_ - psg_localization_node->time_)));

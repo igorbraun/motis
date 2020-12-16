@@ -73,7 +73,8 @@ void print_solution_routes_node_arc(
                      ? "-"
                      : std::to_string(e->trip_->id_.primary_.train_nr_);
       std::cout << "  train " << trp << " type " << e->type_ << " from "
-                << sched.stations_[e->from_->station_]->name_ << " ("
+                << e->from_->station_
+                << " == " << sched.stations_[e->from_->station_]->name_ << " ("
                 << nodes_validity[e->from_->id_] << ") to "
                 << sched.stations_[e->to_->station_]->name_ << " ("
                 << nodes_validity[e->to_->id_] << ") at " << e->from_->time_

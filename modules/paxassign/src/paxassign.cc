@@ -113,9 +113,13 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
         pg->compact_planned_journey_.destination_station_id();
 
     auto& destination_groups = combined_groups[destination_station_id];
-    auto cpg = std::find_if(
-        std::begin(destination_groups), std::end(destination_groups),
-        [&](auto const& g) { return g.localization_ == localization; });
+    auto cpg =
+        std::find_if(std::begin(destination_groups),
+                     std::end(destination_groups), [&](combined_pg const& g) {
+                       return g.localization_ == localization &&
+                              g.groups_[0]->planned_arrival_time_ ==
+                                  pg->planned_arrival_time_;
+                     });
     if (cpg == end(destination_groups)) {
       destination_groups.emplace_back(combined_pg{curr_id++,
                                                   destination_station_id,
@@ -132,18 +136,30 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
-      std::cout << cgs.first << ", " << cpg.localization_.at_station_->index_
-                << ", psgrs: " << cpg.passengers_ << std::endl;
-
       std::cout << sched.stations_[cgs.first]->name_ << " to "
                 << sched.stations_[cpg.localization_.at_station_->index_]->name_
                 << ", psgrs: " << cpg.passengers_ << std::endl;
+
+      std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
+      auto& g = selected_combined_groups[cgs.first];
+      g.push_back(combined_pg{cpg});
+      node_arc_ilp_assignment(selected_combined_groups, data, sched);
+    }
+  }
+
+  throw std::runtime_error("the end");
+  /*
+  std::uint16_t needed_group_idx = 0;
+  for (auto j = 0u; j < combined_groups[65019].size(); ++j) {
+    if (combined_groups[65019][j].groups_[0]->planned_arrival_time_ == 7662) {
+      needed_group_idx = j;
     }
   }
 
   std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
   auto& g = selected_combined_groups[65019];
-  g.push_back(combined_pg{combined_groups[65019][0]});
+  g.push_back(combined_pg{combined_groups[65019][needed_group_idx]});
+*/
 
   if (combined_groups.empty()) {
     return;
@@ -152,7 +168,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  node_arc_ilp_assignment(selected_combined_groups, data, sched);
+  // node_arc_ilp_assignment(selected_combined_groups, data, sched);
   // heuristic_assignments(combined_groups, data, sched);
 }
 
@@ -194,6 +210,7 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
           std::cout << "paxmon::passenger_group.id_ : " << grp->id_
                     << ", source primary ref: " << grp->source_.primary_ref_
                     << ", source secondary ref: " << grp->source_.secondary_ref_
+                    << ", planned arrival time: " << grp->planned_arrival_time_
                     << std::endl;
         }
         size_t curr_alt_ind = 0;
@@ -230,7 +247,6 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
       }
     }
   }
-  throw std::runtime_error("check the outputs");
 
   {
     scoped_timer alt_inchs_timer{"add interchanges to graph"};
@@ -572,6 +588,7 @@ void paxassign::node_arc_ilp_assignment(
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
   print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
+  /*
   std::cout << " ------------------------------ NODE ARC EDGE ANALYSIS: "
                "------------------------------ "
             << std::endl;
@@ -601,6 +618,8 @@ void paxassign::node_arc_ilp_assignment(
 
       for (auto const& alt : cpg.alternatives_) {
         std::cout << "NEW ALTERNATIVE" << std::endl;
+        eg_event_node* from;
+        eg_event_node* to;
         for (auto const& l : alt.compact_journey_.legs_) {
           auto tr_data =
               te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
@@ -609,11 +628,15 @@ void paxassign::node_arc_ilp_assignment(
                            tr_data->second->edges_.end(), [&l](eg_edge* e) {
                              return e->from_->station_ == l.enter_station_id_;
                            });
+          if (from == nullptr) {
+            from = (*entry_edge)->from_;
+          }
           auto exit_edge =
               std::find_if(tr_data->second->edges_.begin(),
                            tr_data->second->edges_.end(), [&l](eg_edge* e) {
                              return e->to_->station_ == l.exit_station_id_;
                            });
+          to = (*exit_edge)->to_;
           std::cout << "train: " << l.trip_->id_.primary_.train_nr_
                     << std::endl;
           for (auto it = entry_edge;; ++it) {
@@ -630,8 +653,18 @@ void paxassign::node_arc_ilp_assignment(
           }
         }
       }
+
+      std::cout << "Before dij" << std::endl;
+      auto solut = sssd_dijkstra<double>(
+          (*eg_psg_g).from_, (*eg_psg_g).to_, (*eg_psg_g).psg_count_, 0.0,
+          std::numeric_limits<double>::max(), te_graph, nodes_validity, 6,
+          calc_perc_tt_dist);
+      std::cout << "GREEDY SOLUTION" << std::endl;
+      print_solution_routes_node_arc(std::vector<std::vector<eg_edge*>>{solut},
+                                     eg_psg_groups, sched, te_graph);
     }
   }
+  */
 
   /*
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "
@@ -654,7 +687,7 @@ void paxassign::node_arc_ilp_assignment(
     }
     */
 
-  throw std::runtime_error("time expanded graph is built");
+  //throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
