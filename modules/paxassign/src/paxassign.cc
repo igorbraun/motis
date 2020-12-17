@@ -136,14 +136,23 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
-      std::cout << sched.stations_[cgs.first]->name_ << " to "
-                << sched.stations_[cpg.localization_.at_station_->index_]->name_
-                << ", psgrs: " << cpg.passengers_ << std::endl;
+      bool contains_needed_group = false;
+      for (auto const& grp : cpg.groups_) {
+        if (grp->id_ == 83364 || grp->id_ == 125658 || grp->id_ == 35042) {
+          contains_needed_group = true;
+        }
+      }
+      if (contains_needed_group) {
+        std::cout
+            << sched.stations_[cgs.first]->name_ << " to "
+            << sched.stations_[cpg.localization_.at_station_->index_]->name_
+            << ", psgrs: " << cpg.passengers_ << std::endl;
 
-      std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
-      auto& g = selected_combined_groups[cgs.first];
-      g.push_back(combined_pg{cpg});
-      node_arc_ilp_assignment(selected_combined_groups, data, sched);
+        std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
+        auto& g = selected_combined_groups[cgs.first];
+        g.push_back(combined_pg{cpg});
+        node_arc_ilp_assignment(selected_combined_groups, data, sched);
+      }
     }
   }
 
@@ -687,7 +696,7 @@ void paxassign::node_arc_ilp_assignment(
     }
     */
 
-  //throw std::runtime_error("time expanded graph is built");
+  // throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
