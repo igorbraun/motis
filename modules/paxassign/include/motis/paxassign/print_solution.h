@@ -47,11 +47,11 @@ void print_solution_routes_halle(
           trp = std::to_string(e->trip_->id_.primary_.train_nr_);
         }
         std::cout << "  train " << trp << " type " << e->type_ << " from "
-                  << sched.stations_[e->from_->station_]->name_ << " to "
-                  << sched.stations_[e->to_->station_]->name_ << " at "
-                  << format_time(e->from_->time_) << " - "
-                  << format_time(e->to_->time_) << " cost " << e->tt_
-                  << std::endl;
+                  << e->from_->station_
+                  << " == " << sched.stations_[e->from_->station_]->name_
+                  << " to " << sched.stations_[e->to_->station_]->name_
+                  << " at " << e->from_->time_ << " - " << e->to_->time_
+                  << " cost " << e->tt_ << std::endl;
       }
     }
   }

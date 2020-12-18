@@ -138,7 +138,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     for (auto& cpg : cgs.second) {
       bool contains_needed_group = false;
       for (auto const& grp : cpg.groups_) {
-        if (grp->id_ == 83364 || grp->id_ == 125658 || grp->id_ == 35042) {
+        if (grp->id_ == 35042) {  // grp->id_ == 83364 || grp->id_ == 125658 ||
           contains_needed_group = true;
         }
       }
@@ -471,13 +471,14 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
 
   // print_solution_routes_mini_halle(cpg_id_to_group, sol.alt_to_use_, sched);
 
-  // print_solution_routes_halle(cap_ILP_scenario, sol.alt_to_use_, sched);
+  print_solution_routes_halle(cap_ILP_scenario, sol.alt_to_use_, sched);
 
   // std::cout << "HALLE APPROACH. Passengers in scenario INPUT : " <<
   // psgs_in_sc
   //          << ", OUTPUT assignments : " << sol.alt_to_use_.size() <<
   //          std::endl;
 
+  /*
   std::cout << " ------------------------------ HALLE EDGE ANALYSIS: "
                "------------------------------ "
             << std::endl;
@@ -520,6 +521,7 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
       }
     }
   }
+  */
   return sol.alt_to_use_;
 
   // throw std::runtime_error("time expanded graph is built");
@@ -597,7 +599,6 @@ void paxassign::node_arc_ilp_assignment(
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
   print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
-  /*
   std::cout << " ------------------------------ NODE ARC EDGE ANALYSIS: "
                "------------------------------ "
             << std::endl;
@@ -649,12 +650,13 @@ void paxassign::node_arc_ilp_assignment(
           std::cout << "train: " << l.trip_->id_.primary_.train_nr_
                     << std::endl;
           for (auto it = entry_edge;; ++it) {
-            std::cout << "from "
+            std::cout << "from " << (*it)->from_->station_ << " == "
                       << sched.stations_[(*it)->from_->station_]->name_ << " ("
                       << nodes_validity[(*it)->from_->id_]
                       << ") time: " << (*it)->from_->time_ << " to "
-                      << sched.stations_[(*it)->to_->station_]->name_ << " ("
-                      << nodes_validity[(*it)->to_->id_]
+                      << (*it)->to_->station_
+                      << " == " << sched.stations_[(*it)->to_->station_]->name_
+                      << " (" << nodes_validity[(*it)->to_->id_]
                       << ") time: " << (*it)->to_->time_
                       << ", psgrs: " << (*it)->passengers_ << " / "
                       << (*it)->soft_cap_boundary_ << std::endl;
@@ -662,18 +664,18 @@ void paxassign::node_arc_ilp_assignment(
           }
         }
       }
-
-      std::cout << "Before dij" << std::endl;
-      auto solut = sssd_dijkstra<double>(
-          (*eg_psg_g).from_, (*eg_psg_g).to_, (*eg_psg_g).psg_count_, 0.0,
-          std::numeric_limits<double>::max(), te_graph, nodes_validity, 6,
-          calc_perc_tt_dist);
-      std::cout << "GREEDY SOLUTION" << std::endl;
-      print_solution_routes_node_arc(std::vector<std::vector<eg_edge*>>{solut},
-                                     eg_psg_groups, sched, te_graph);
+      /*
+            std::cout << "Before dij" << std::endl;
+            auto solut = sssd_dijkstra<double>(
+                (*eg_psg_g).from_, (*eg_psg_g).to_, (*eg_psg_g).psg_count_, 0.0,
+                std::numeric_limits<double>::max(), te_graph, nodes_validity, 6,
+                calc_perc_tt_dist);
+            std::cout << "GREEDY SOLUTION" << std::endl;
+            print_solution_routes_node_arc(std::vector<std::vector<eg_edge*>>{solut},
+                                           eg_psg_groups, sched, te_graph);
+            */
     }
   }
-  */
 
   /*
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "

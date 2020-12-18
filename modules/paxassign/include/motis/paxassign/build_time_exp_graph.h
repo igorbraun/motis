@@ -163,11 +163,16 @@ std::vector<eg_event_node*> create_wait_nodes(
                          .get();
     graph.st_to_nodes_[wait_node->station_].push_back(wait_node);
     for (auto& n : ttn.second) {
-      (n->type_ == eg_event_type::DEP)
-          ? graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-                wait_node, n, eg_edge_type::TRAIN_ENTRY, 0)))
-          : graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-                n, wait_node, eg_edge_type::TRAIN_EXIT, transfer_cost)));
+      if (n->type_ == eg_event_type::DEP) {
+        graph.not_trip_edges_.emplace_back(add_edge(
+            make_not_in_trip_edge(wait_node, n, eg_edge_type::TRAIN_ENTRY, 0)));
+      } else if (n->type_ == eg_event_type::ARR) {
+        graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+            n, wait_node, eg_edge_type::TRAIN_EXIT, transfer_cost)));
+      } else if (n->type_ == eg_event_type::FOOT_ARR) {
+        graph.not_trip_edges_.emplace_back(add_edge(
+            make_not_in_trip_edge(n, wait_node, eg_edge_type::TRAIN_EXIT, 0)));
+      }
     }
     wait_nodes.push_back(wait_node);
   }
@@ -178,9 +183,10 @@ std::map<time, std::vector<eg_event_node*>> map_time_to_nodes(
     std::vector<eg_event_node*> const& nodes, uint32_t const transfer_cost) {
   std::map<time, std::vector<eg_event_node*>> result;
   for (auto const& n : nodes) {
-    time t = (n->type_ == eg_event_type::DEP)
-                 ? n->time_
-                 : static_cast<time>(n->time_ + transfer_cost);
+    time t =
+        (n->type_ == eg_event_type::DEP || n->type_ == eg_event_type::FOOT_ARR)
+            ? n->time_
+            : static_cast<time>(n->time_ + transfer_cost);
     result[t].push_back(n);
   }
   return result;
@@ -191,6 +197,30 @@ void build_transfers(std::vector<eg_event_node*> const& nodes,
   auto time_to_nodes = map_time_to_nodes(nodes, transfer_cost);
   auto wait_nodes = create_wait_nodes(time_to_nodes, g, transfer_cost);
   connect_wait_nodes(wait_nodes, g);
+}
+
+void build_foot_edges(uint32_t station_id, schedule const& sched,
+                      time_expanded_graph& g) {
+  for (auto const out_fe : sched.stations_[station_id]->outgoing_footpaths_) {
+    for (auto& n : g.st_to_nodes_[station_id]) {
+      if (n->type_ == eg_event_type::ARR) {
+        auto foot_e_dest_node =
+            g.nodes_
+                .emplace_back(std::make_unique<eg_event_node>(eg_event_node{
+                    static_cast<time>(n->time_ + out_fe.duration_),
+                    eg_event_type::FOOT_ARR,
+                    out_fe.to_station_,
+                    {},
+                    {},
+                    g.nodes_.size()}))
+                .get();
+        g.st_to_nodes_[out_fe.to_station_].push_back(foot_e_dest_node);
+        g.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+            n, foot_e_dest_node, eg_edge_type::WAIT_STATION,
+            out_fe.duration_)));
+      }
+    }
+  }
 }
 
 time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
@@ -209,6 +239,13 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
 
   {
     logging::scoped_timer alt_timer{"add transfers to te-graph"};
+    // at the time not needed
+    for (auto const& sn : sched.station_nodes_) {
+      if (!te_graph.st_to_nodes_[sn->id_].empty()) {
+        build_foot_edges(sn->id_, sched, te_graph);
+      }
+    }
+
     auto station_count = sched.station_nodes_.size();
     int i = 0;
     for (auto const& sn : sched.station_nodes_) {
@@ -244,7 +281,6 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
     assert(at_edge != tr_data->second->edges_.end());
     return (*at_edge)->to_;
   } else {
-    // TODO: check that this case works well
     // CASE II: Passenger at station, either before journey or at interchange
     auto psg_localization_node =
         te_graph.nodes_
@@ -258,37 +294,6 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
             .get();
     te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].push_back(
         psg_localization_node);
-    /*
-        std::cout << "ALL NODES AT ST:" << std::endl;
-        for (auto const& n :
-       te_graph.st_to_nodes_[cpg.localization_.at_station_->index_]) { std::cout
-       << n->time_ << ", " << n->type_ << std::endl;
-        }
-        std::vector<eg_event_node*> debug_rel_nodes;
-        std::copy_if(
-            te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].begin(),
-            te_graph.st_to_nodes_[cpg.localization_.at_station_->index_].end(),
-            std::back_inserter(debug_rel_nodes), [&cpg](eg_event_node const* n)
-       { return n->type_ == eg_event_type::WAIT && n->time_ >=
-       cpg.localization_.current_arrival_time_;
-            });
-        std::cout << "PSG ARR TIME: " << cpg.localization_.current_arrival_time_
-       << std::endl; std::cout << "DEBUG_REL_NODES SIZE: " <<
-       debug_rel_nodes.size()
-                  << std::endl;
-        std::cout << "UNSORTED: " << std::endl;
-        for (auto const& n : debug_rel_nodes) {
-          std::cout << n->time_ << ", " << n->type_ << std::endl;
-        }
-        std::sort(std::begin(debug_rel_nodes), std::end(debug_rel_nodes),
-                  [](eg_event_node const* lhs, eg_event_node const* rhs) {
-                    return lhs->time_ < rhs->time_;
-                  });
-        std::cout << "SORTED: " << std::endl;
-        for (auto const& n : debug_rel_nodes) {
-          std::cout << n->time_ << ", " << n->type_ << std::endl;
-        }
-    */
     std::vector<eg_event_node*> relevant_nodes =
         utl::all(te_graph.st_to_nodes_[cpg.localization_.at_station_->index_]) |
         utl::remove_if([&](auto const& n) {
@@ -304,12 +309,6 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                 [](eg_event_node const* lhs, eg_event_node const* rhs) {
                   return lhs->time_ < rhs->time_;
                 });
-      /*
-      std::cout << "ORIGINAL REL NODES: " << std::endl;
-      for(auto const& n : relevant_nodes){
-        std::cout << n->time_ << ", " << n->type_ << std::endl;
-      }
-       */
       te_graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
           psg_localization_node, relevant_nodes[0], eg_edge_type::WAIT_STATION,
           relevant_nodes[0]->time_ - psg_localization_node->time_)));
