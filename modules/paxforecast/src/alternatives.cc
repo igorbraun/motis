@@ -56,7 +56,8 @@ msg_ptr ontrip_train_query(schedule const& sched, trip const* trp,
               fbb.CreateString("")),
           SearchType_Default, SearchDir_Forward,
           fbb.CreateVector(std::vector<Offset<Via>>()),
-          fbb.CreateVector(std::vector<Offset<AdditionalEdgeWrapper>>()))
+          fbb.CreateVector(std::vector<Offset<AdditionalEdgeWrapper>>()), false,
+          false)
           .Union(),
       "/routing");
   return make_msg(fbb);
@@ -87,7 +88,8 @@ msg_ptr ontrip_station_query(schedule const& sched,
               fbb.CreateString("")),
           SearchType_Default, SearchDir_Forward,
           fbb.CreateVector(std::vector<Offset<Via>>()),
-          fbb.CreateVector(std::vector<Offset<AdditionalEdgeWrapper>>()))
+          fbb.CreateVector(std::vector<Offset<AdditionalEdgeWrapper>>()), false,
+          false)
           .Union(),
       "/routing");
   return make_msg(fbb);

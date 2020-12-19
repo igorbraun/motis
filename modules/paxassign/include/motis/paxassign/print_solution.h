@@ -35,7 +35,8 @@ void print_solution_routes_halle(
                      });
     assert(cpg != cap_ilp_psg_groups.end());
 
-    if (cpg->alternatives_.size() <= assignment.second) {
+    if (cpg->alternatives_[assignment.second].edges_[0]->type_ ==
+        edge_type::NOROUTE) {
       std::cout << "NO ROUTE ALTERNATIVE for GROUP(ID) " << cpg->id_ << " with "
                 << cpg->psg_count_ << " passengers" << std::endl;
     } else {

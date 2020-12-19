@@ -137,6 +137,7 @@ eg_trip_data* get_or_add_trip(schedule const& sched,
 
 void connect_wait_nodes(std::vector<eg_event_node*>& wait_nodes,
                         time_expanded_graph& g) {
+  if (wait_nodes.empty()) return;
   std::sort(
       std::begin(wait_nodes), std::end(wait_nodes),
       [](auto const& lhs, auto const& rhs) { return lhs->time_ < rhs->time_; });
@@ -170,8 +171,8 @@ std::vector<eg_event_node*> create_wait_nodes(
         graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
             n, wait_node, eg_edge_type::TRAIN_EXIT, transfer_cost)));
       } else if (n->type_ == eg_event_type::FOOT_ARR) {
-        graph.not_trip_edges_.emplace_back(add_edge(
-            make_not_in_trip_edge(n, wait_node, eg_edge_type::TRAIN_EXIT, 0)));
+        graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+            n, wait_node, eg_edge_type::WAIT_STATION, 0)));
       }
     }
     wait_nodes.push_back(wait_node);
@@ -192,11 +193,81 @@ std::map<time, std::vector<eg_event_node*>> map_time_to_nodes(
   return result;
 }
 
-void build_transfers(std::vector<eg_event_node*> const& nodes,
-                     uint32_t const transfer_cost, time_expanded_graph& g) {
-  auto time_to_nodes = map_time_to_nodes(nodes, transfer_cost);
-  auto wait_nodes = create_wait_nodes(time_to_nodes, g, transfer_cost);
+// 1. Warteknoten nur für DEP
+// 2. Connect ARR to the closest wait if Arr.time + transfer < wait.time
+// 3. Foot paths: f.e. arr at st_1 go over foot paths going to st_2 and insert
+// an edge between Arr.st_1 and Wait.st_2 if Arr.st_1.time + foot_path.duration
+// < Arr.st_2.time
+
+void connect_arrs_to_waits(uint32_t const station_id, time_expanded_graph& g,
+                           schedule const& sched) {
+  auto const transfer_time = sched.stations_[station_id]->transfer_time_;
+  for (auto& curr_arr_n : g.st_to_nodes_[station_id]) {
+    if (curr_arr_n->type_ == eg_event_type::ARR) {
+      std::vector<eg_event_node*> relevant_wait_nodes =
+          utl::all(g.st_to_nodes_[station_id]) |
+          utl::remove_if([&](auto const& n) {
+            return n->type_ != eg_event_type::WAIT ||
+                   n->time_ <= curr_arr_n->time_ + transfer_time;
+          }) |
+          utl::vec();
+      if (relevant_wait_nodes.empty()) {
+        return;
+      } else {
+        std::sort(std::begin(relevant_wait_nodes),
+                  std::end(relevant_wait_nodes),
+                  [](eg_event_node const* lhs, eg_event_node const* rhs) {
+                    return lhs->time_ < rhs->time_;
+                  });
+        g.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+            curr_arr_n, relevant_wait_nodes[0], eg_edge_type::TRAIN_EXIT,
+            relevant_wait_nodes[0]->time_ - curr_arr_n->time_)));
+      }
+    }
+  }
+}
+
+std::vector<eg_event_node*> create_wait_nodes_for_deps(
+    std::map<time, std::vector<eg_event_node*>>& time_to_nodes,
+    time_expanded_graph& graph) {
+  std::vector<eg_event_node*> wait_nodes;
+  for (auto& ttn : time_to_nodes) {
+    auto wait_node = graph.nodes_
+                         .emplace_back(std::make_unique<eg_event_node>(
+                             eg_event_node{ttn.first,
+                                           eg_event_type::WAIT,
+                                           ttn.second[0]->station_,
+                                           {},
+                                           {},
+                                           graph.nodes_.size()}))
+                         .get();
+    graph.st_to_nodes_[wait_node->station_].push_back(wait_node);
+    for (auto& n : ttn.second) {
+      graph.not_trip_edges_.emplace_back(add_edge(
+          make_not_in_trip_edge(wait_node, n, eg_edge_type::TRAIN_ENTRY, 0)));
+    }
+    wait_nodes.push_back(wait_node);
+  }
+  return wait_nodes;
+}
+
+std::map<time, std::vector<eg_event_node*>> map_time_to_dep_nodes(
+    std::vector<eg_event_node*> const& nodes) {
+  std::map<time, std::vector<eg_event_node*>> result;
+  for (auto const& n : nodes) {
+    if (n->type_ == eg_event_type::DEP) {
+      result[n->time_].push_back(n);
+    }
+  }
+  return result;
+}
+
+void build_transfers(uint32_t station_id, time_expanded_graph& g,
+                     schedule const& sched) {
+  auto time_to_dep_nodes = map_time_to_dep_nodes(g.st_to_nodes_[station_id]);
+  auto wait_nodes = create_wait_nodes_for_deps(time_to_dep_nodes, g);
   connect_wait_nodes(wait_nodes, g);
+  connect_arrs_to_waits(station_id, g, sched);
 }
 
 void build_foot_edges(uint32_t station_id, schedule const& sched,
@@ -240,11 +311,12 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
   {
     logging::scoped_timer alt_timer{"add transfers to te-graph"};
     // at the time not needed
-    for (auto const& sn : sched.station_nodes_) {
+    /*for (auto const& sn : sched.station_nodes_) {
       if (!te_graph.st_to_nodes_[sn->id_].empty()) {
         build_foot_edges(sn->id_, sched, te_graph);
       }
     }
+    */
 
     auto station_count = sched.station_nodes_.size();
     int i = 0;
@@ -255,8 +327,10 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
       }
       i++;
       if (!te_graph.st_to_nodes_[sn->id_].empty()) {
-        build_transfers(te_graph.st_to_nodes_[sn->id_],
-                        sched.stations_[sn->id_]->transfer_time_, te_graph);
+        build_transfers(sn->id_,
+                        // te_graph.st_to_nodes_[sn->id_],
+                        // sched.stations_[sn->id_]->transfer_time_,
+                        te_graph, sched);
       }
     }
   }

@@ -133,6 +133,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     }
   }
 
+
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
@@ -156,7 +157,9 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     }
   }
 
-  throw std::runtime_error("the end");
+
+  //throw std::runtime_error("the end");
+
   /*
   std::uint16_t needed_group_idx = 0;
   for (auto j = 0u; j < combined_groups[65019].size(); ++j) {
@@ -168,7 +171,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
   auto& g = selected_combined_groups[65019];
   g.push_back(combined_pg{combined_groups[65019][needed_group_idx]});
-*/
+  */
 
   if (combined_groups.empty()) {
     return;
@@ -177,7 +180,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  // node_arc_ilp_assignment(selected_combined_groups, data, sched);
+  node_arc_ilp_assignment(combined_groups, data, sched);
   // heuristic_assignments(combined_groups, data, sched);
 }
 
@@ -584,6 +587,12 @@ void paxassign::node_arc_ilp_assignment(
   node_arc_config na_config{1.2, 30, 6, 10000};
   perceived_tt_config perc_tt_config;
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
+  std::cout << "NODES IN GRAPH : " << te_graph.nodes_.size() << std::endl;
+  uint32_t nodes_count = 0;
+  for(auto const& n : te_graph.nodes_){
+    nodes_count += n->out_edges_.size();
+  }
+  std::cout << "EDGES IN GRAPH : " << nodes_count << std::endl;
 
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
@@ -698,7 +707,7 @@ void paxassign::node_arc_ilp_assignment(
     }
     */
 
-  // throw std::runtime_error("time expanded graph is built");
+   throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
