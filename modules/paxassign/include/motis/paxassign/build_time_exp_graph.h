@@ -148,57 +148,6 @@ void connect_wait_nodes(std::vector<eg_event_node*>& wait_nodes,
   }
 }
 
-std::vector<eg_event_node*> create_wait_nodes(
-    std::map<time, std::vector<eg_event_node*>>& time_to_nodes,
-    time_expanded_graph& graph, uint32_t const transfer_cost) {
-  std::vector<eg_event_node*> wait_nodes;
-  for (auto& ttn : time_to_nodes) {
-    auto wait_node = graph.nodes_
-                         .emplace_back(std::make_unique<eg_event_node>(
-                             eg_event_node{ttn.first,
-                                           eg_event_type::WAIT,
-                                           ttn.second[0]->station_,
-                                           {},
-                                           {},
-                                           graph.nodes_.size()}))
-                         .get();
-    graph.st_to_nodes_[wait_node->station_].push_back(wait_node);
-    for (auto& n : ttn.second) {
-      if (n->type_ == eg_event_type::DEP) {
-        graph.not_trip_edges_.emplace_back(add_edge(
-            make_not_in_trip_edge(wait_node, n, eg_edge_type::TRAIN_ENTRY, 0)));
-      } else if (n->type_ == eg_event_type::ARR) {
-        graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-            n, wait_node, eg_edge_type::TRAIN_EXIT, transfer_cost)));
-      } else if (n->type_ == eg_event_type::FOOT_ARR) {
-        graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-            n, wait_node, eg_edge_type::WAIT_STATION, 0)));
-      }
-    }
-    wait_nodes.push_back(wait_node);
-  }
-  return wait_nodes;
-}
-
-std::map<time, std::vector<eg_event_node*>> map_time_to_nodes(
-    std::vector<eg_event_node*> const& nodes, uint32_t const transfer_cost) {
-  std::map<time, std::vector<eg_event_node*>> result;
-  for (auto const& n : nodes) {
-    time t =
-        (n->type_ == eg_event_type::DEP || n->type_ == eg_event_type::FOOT_ARR)
-            ? n->time_
-            : static_cast<time>(n->time_ + transfer_cost);
-    result[t].push_back(n);
-  }
-  return result;
-}
-
-// 1. Warteknoten nur für DEP
-// 2. Connect ARR to the closest wait if Arr.time + transfer < wait.time
-// 3. Foot paths: f.e. arr at st_1 go over foot paths going to st_2 and insert
-// an edge between Arr.st_1 and Wait.st_2 if Arr.st_1.time + foot_path.duration
-// < Arr.st_2.time
-
 void connect_arrs_to_waits(uint32_t const station_id, time_expanded_graph& g,
                            schedule const& sched) {
   auto const transfer_time = sched.stations_[station_id]->transfer_time_;
@@ -212,7 +161,7 @@ void connect_arrs_to_waits(uint32_t const station_id, time_expanded_graph& g,
           }) |
           utl::vec();
       if (relevant_wait_nodes.empty()) {
-        return;
+        continue;
       } else {
         std::sort(std::begin(relevant_wait_nodes),
                   std::end(relevant_wait_nodes),
@@ -270,25 +219,30 @@ void build_transfers(uint32_t station_id, time_expanded_graph& g,
   connect_arrs_to_waits(station_id, g, sched);
 }
 
-void build_foot_edges(uint32_t station_id, schedule const& sched,
-                      time_expanded_graph& g) {
+void build_foot_edges(uint32_t station_id, time_expanded_graph& g,
+                      schedule const& sched) {
   for (auto const out_fe : sched.stations_[station_id]->outgoing_footpaths_) {
-    for (auto& n : g.st_to_nodes_[station_id]) {
-      if (n->type_ == eg_event_type::ARR) {
-        auto foot_e_dest_node =
-            g.nodes_
-                .emplace_back(std::make_unique<eg_event_node>(eg_event_node{
-                    static_cast<time>(n->time_ + out_fe.duration_),
-                    eg_event_type::FOOT_ARR,
-                    out_fe.to_station_,
-                    {},
-                    {},
-                    g.nodes_.size()}))
-                .get();
-        g.st_to_nodes_[out_fe.to_station_].push_back(foot_e_dest_node);
-        g.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
-            n, foot_e_dest_node, eg_edge_type::WAIT_STATION,
-            out_fe.duration_)));
+    for (auto& curr_n : g.st_to_nodes_[station_id]) {
+      if (curr_n->type_ == eg_event_type::ARR) {
+        std::vector<eg_event_node*> rel_wait_nodes_at_to_st =
+            utl::all(g.st_to_nodes_[out_fe.to_station_]) |
+            utl::remove_if([&](auto const& n) {
+              return n->type_ != eg_event_type::WAIT ||
+                     n->time_ <= curr_n->time_ + out_fe.duration_;
+            }) |
+            utl::vec();
+        if (rel_wait_nodes_at_to_st.empty()) {
+          continue;
+        } else {
+          std::sort(std::begin(rel_wait_nodes_at_to_st),
+                    std::end(rel_wait_nodes_at_to_st),
+                    [](eg_event_node const* lhs, eg_event_node const* rhs) {
+                      return lhs->time_ < rhs->time_;
+                    });
+          g.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+              curr_n, rel_wait_nodes_at_to_st[0], eg_edge_type::WAIT_STATION,
+              rel_wait_nodes_at_to_st[0]->time_ - curr_n->time_)));
+        }
       }
     }
   }
@@ -310,14 +264,6 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
 
   {
     logging::scoped_timer alt_timer{"add transfers to te-graph"};
-    // at the time not needed
-    /*for (auto const& sn : sched.station_nodes_) {
-      if (!te_graph.st_to_nodes_[sn->id_].empty()) {
-        build_foot_edges(sn->id_, sched, te_graph);
-      }
-    }
-    */
-
     auto station_count = sched.station_nodes_.size();
     int i = 0;
     for (auto const& sn : sched.station_nodes_) {
@@ -327,10 +273,12 @@ time_expanded_graph build_time_expanded_graph(paxmon_data const& data,
       }
       i++;
       if (!te_graph.st_to_nodes_[sn->id_].empty()) {
-        build_transfers(sn->id_,
-                        // te_graph.st_to_nodes_[sn->id_],
-                        // sched.stations_[sn->id_]->transfer_time_,
-                        te_graph, sched);
+        build_transfers(sn->id_, te_graph, sched);
+      }
+    }
+    for (auto const& sn : sched.station_nodes_) {
+      if (!te_graph.st_to_nodes_[sn->id_].empty()) {
+        build_foot_edges(sn->id_, te_graph, sched);
       }
     }
   }
