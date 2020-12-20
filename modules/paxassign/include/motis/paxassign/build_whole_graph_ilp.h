@@ -13,7 +13,8 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     node_arc_config const& na_config, perceived_tt_config const& tt_config,
     schedule const& sched,
     std::map<std::string, std::tuple<double, double, double, double>>&
-        variables_with_values) {
+        variables_with_values,
+    std::ofstream& results_file) {
   try {
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
@@ -267,6 +268,8 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     if (status != GRB_OPTIMAL) {
       throw std::runtime_error("node-arc-form ILP model: solution not optimal");
     }
+
+    results_file << model.get(GRB_DoubleAttr_ObjVal) << "\n";
 
     for (auto const& ecv : edge_cost_vars) {
       for (auto const& curr_ecv : ecv.second) {

@@ -9,14 +9,13 @@ namespace motis::paxassign {
 struct eg_edge;
 struct time_expanded_graph;
 
-enum class eg_event_type : uint8_t { DEP, ARR, FOOT_ARR, WAIT };
+enum class eg_event_type : uint8_t { DEP, ARR, WAIT };
 
 inline std::ostream& operator<<(std::ostream& o, eg_event_type const t) {
   switch (t) {
     case eg_event_type::ARR: return o << "ARR";
     case eg_event_type::DEP: return o << "DEP";
     case eg_event_type::WAIT: return o << "WAIT";
-    case eg_event_type::FOOT_ARR: return o << "FOOT_ARR";
   }
   return o;
 }

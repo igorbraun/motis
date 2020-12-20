@@ -15,7 +15,8 @@ cap_ILP_solution build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
     perceived_tt_config const& config, std::string const&,
     std::map<std::string, std::tuple<double, double, double, double>>&
-        variables_with_values) {
+        variables_with_values,
+    std::ofstream& results_file) {
   try {
     std::set<cap_ILP_edge*> handled_edges;
     std::map<cap_ILP_edge*, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
@@ -218,6 +219,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
       }
     }
 
+    results_file << model.get(GRB_DoubleAttr_ObjVal) << ",";
 
     for (auto const& arv : alt_route_vars) {
       for (auto const& curr_arv : arv) {

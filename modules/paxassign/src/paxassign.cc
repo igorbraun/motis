@@ -133,16 +133,20 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     }
   }
 
-
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
+  std::ofstream results_file("comparison.csv");
+  results_file << "ID,Halle_obj,NA_obj\n";
+  uint16_t curr_scenario_id = 0;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
+      /*
       bool contains_needed_group = false;
       for (auto const& grp : cpg.groups_) {
         if (grp->id_ == 35042) {  // grp->id_ == 83364 || grp->id_ == 125658 ||
           contains_needed_group = true;
         }
       }
+
       if (contains_needed_group) {
         std::cout
             << sched.stations_[cgs.first]->name_ << " to "
@@ -154,11 +158,18 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
         g.push_back(combined_pg{cpg});
         node_arc_ilp_assignment(selected_combined_groups, data, sched);
       }
+      */
+      std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
+      auto& g = selected_combined_groups[cgs.first];
+      g.push_back(combined_pg{cpg});
+      results_file << curr_scenario_id++ << ",";
+      node_arc_ilp_assignment(selected_combined_groups, data, sched,
+                              results_file);
     }
   }
+  results_file.close();
 
-
-  //throw std::runtime_error("the end");
+  // throw std::runtime_error("the end");
 
   /*
   std::uint16_t needed_group_idx = 0;
@@ -180,7 +191,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  node_arc_ilp_assignment(combined_groups, data, sched);
+  // node_arc_ilp_assignment(combined_groups, data, sched);
   // heuristic_assignments(combined_groups, data, sched);
 }
 
@@ -188,7 +199,8 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched,
     std::map<std::string, std::tuple<double, double, double, double>>&
-        variables_with_values) {
+        variables_with_values,
+    std::ofstream& results_file) {
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
     psgs_in_sc += cgs.second.size();
@@ -464,7 +476,7 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
     sol = build_ILP_from_scenario_API(cap_ILP_scenario, perc_tt_config,
                                       std::to_string(cap_ILP_scenario.size()) +
                                           "_" + std::to_string(random_variable),
-                                      variables_with_values);
+                                      variables_with_values, results_file);
   }
 
   auto final_obj = piecewise_linear_convex_perceived_tt_halle(
@@ -572,12 +584,12 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
 
 void paxassign::node_arc_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-    paxmon_data& data, schedule const& sched) {
+    paxmon_data& data, schedule const& sched, std::ofstream& results_file) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
 
-  auto alts_to_use = cap_ilp_assignment(combined_groups, data, sched,
-                                        variables_with_values_halle);
+  auto alts_to_use = cap_ilp_assignment(
+      combined_groups, data, sched, variables_with_values_halle, results_file);
 
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
@@ -589,7 +601,7 @@ void paxassign::node_arc_ilp_assignment(
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
   std::cout << "NODES IN GRAPH : " << te_graph.nodes_.size() << std::endl;
   uint32_t nodes_count = 0;
-  for(auto const& n : te_graph.nodes_){
+  for (auto const& n : te_graph.nodes_) {
     nodes_count += n->out_edges_.size();
   }
   std::cout << "EDGES IN GRAPH : " << nodes_count << std::endl;
@@ -601,7 +613,7 @@ void paxassign::node_arc_ilp_assignment(
       variables_with_values_node_arc;
   auto solution =
       node_arc_ilp(eg_psg_groups, te_graph, na_config, perc_tt_config, sched,
-                   variables_with_values_node_arc);
+                   variables_with_values_node_arc, results_file);
 
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
@@ -707,7 +719,7 @@ void paxassign::node_arc_ilp_assignment(
     }
     */
 
-   throw std::runtime_error("time expanded graph is built");
+  // throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(

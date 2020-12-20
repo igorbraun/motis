@@ -33,10 +33,10 @@ private:
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched,
       std::map<std::string, std::tuple<double, double, double, double>>&
-          variables_with_values);
+          variables_with_values, std::ofstream& results_file);
   void node_arc_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-      paxmon_data& data, schedule const& sched);
+      paxmon_data& data, schedule const& sched, std::ofstream& results_file);
   void heuristic_assignments(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, const schedule& sched);
