@@ -97,7 +97,9 @@ enum SearchType : byte {
   LateConnectionsTest,
   Accessibility,
   DefaultPrice,
-  DefaultPriceRegional
+  DefaultPriceRegional,
+  PerceivedTravelTime,
+  LoadSum
 }
 
 // ----------------------------------------------------------------------------
