@@ -54,7 +54,7 @@ msg_ptr ontrip_train_query(schedule const& sched, trip const* trp,
               fbb.CreateString(
                   sched.stations_[destination_station_id]->eva_nr_),
               fbb.CreateString("")),
-          SearchType_Default, SearchDir_Forward,
+          SearchType_PerceivedTravelTime, SearchDir_Forward,
           fbb.CreateVector(std::vector<Offset<Via>>()),
           fbb.CreateVector(std::vector<Offset<AdditionalEdgeWrapper>>()), false,
           false)
@@ -86,7 +86,7 @@ msg_ptr ontrip_station_query(schedule const& sched,
               fbb.CreateString(
                   sched.stations_[destination_station_id]->eva_nr_),
               fbb.CreateString("")),
-          SearchType_Default, SearchDir_Forward,
+          SearchType_PerceivedTravelTime, SearchDir_Forward,
           fbb.CreateVector(std::vector<Offset<Via>>()),
           fbb.CreateVector(std::vector<Offset<AdditionalEdgeWrapper>>()), false,
           false)
