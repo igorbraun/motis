@@ -76,6 +76,11 @@ include "paxassign/ConnAssignment.fbs";
 include "paxmon/AddPassengerGroupsRequest.fbs";
 include "paxmon/AddPassengerGroupsResponse.fbs";
 include "paxmon/RemovePassengerGroupsRequest.fbs";
+include "paxmon/PaxMonFindTripsRequest.fbs";
+include "paxmon/PaxMonFindTripsResponse.fbs";
+include "paxmon/PaxMonStatusRequest.fbs";
+include "paxmon/PaxMonStatusResponse.fbs";
+include "paxmon/TripLoadInfo.fbs";
 include "paxforecast/PassengerForecast.fbs";
 
 include "HTTPMessage.fbs";
@@ -222,7 +227,12 @@ union MsgContent {
   motis.paxmon.AddPassengerGroupsRequest                                  = 098,
   motis.paxmon.AddPassengerGroupsResponse                                 = 099,
   motis.paxmon.RemovePassengerGroupsRequest                               = 100,
-  motis.paxassign.ConnAssignments                                         = 101
+  motis.paxmon.TripLoadInfo                                               = 101,
+  motis.paxmon.PaxMonFindTripsRequest                                     = 102,
+  motis.paxmon.PaxMonFindTripsResponse                                    = 103,
+  motis.paxmon.PaxMonStatusRequest                                        = 104,
+  motis.paxmon.PaxMonStatusResponse                                       = 105,
+  motis.paxassign.ConnAssignments                                         = 106
 }
 
 // Destination Examples:
