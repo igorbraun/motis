@@ -133,16 +133,19 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     }
   }
 
+
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   std::ofstream results_file("comparison.csv");
   results_file << "ID,Halle_obj,NA_obj\n";
   uint16_t curr_scenario_id = 0;
+  /*
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
-      /*
+      // first block
       bool contains_needed_group = false;
       for (auto const& grp : cpg.groups_) {
-        if (grp->id_ == 35042) {  // grp->id_ == 83364 || grp->id_ == 125658 ||
+        if (grp->id_ == 155721) {  // grp->id_ == 83364 || grp->id_ == 125658 ||
+          // 35042 - one psg with 215 min
           contains_needed_group = true;
         }
       }
@@ -156,18 +159,21 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
         std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
         auto& g = selected_combined_groups[cgs.first];
         g.push_back(combined_pg{cpg});
-        node_arc_ilp_assignment(selected_combined_groups, data, sched);
+        node_arc_ilp_assignment(selected_combined_groups, data, sched,
+                                results_file);
       }
-      */
+
+      // second block
       std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
       auto& g = selected_combined_groups[cgs.first];
       g.push_back(combined_pg{cpg});
       results_file << curr_scenario_id++ << ",";
       node_arc_ilp_assignment(selected_combined_groups, data, sched,
                               results_file);
+
     }
   }
-  results_file.close();
+  */
 
   // throw std::runtime_error("the end");
 
@@ -191,8 +197,9 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  // node_arc_ilp_assignment(combined_groups, data, sched);
+  node_arc_ilp_assignment(combined_groups, data, sched, results_file);
   // heuristic_assignments(combined_groups, data, sched);
+  results_file.close();
 }
 
 std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
@@ -282,10 +289,6 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
           for (auto const& leg : alt.compact_journey_.legs_) {
             auto td = get_or_add_trip(sched, data, leg.trip_);
             if (last_node != nullptr) {
-              // TODO. interchange edge cost here and in the node-arc graph
-              // should be equivalent. Check it
-              // auto const transfer_time =
-              // get_transfer_duration(leg.enter_transfer_);
               auto const inch_e_start_idx = find_edge_idx(td, leg, true);
               add_interchange_edge(last_node,
                                    td->edges_[inch_e_start_idx]->from_, 0,
