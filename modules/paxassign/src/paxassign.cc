@@ -32,6 +32,7 @@
 #include "motis/paxassign/print_solution.h"
 #include "motis/paxassign/service_functions.h"
 #include "motis/paxassign/service_time_exp_graph.h"
+#include "motis/paxassign/solution_to_compact_journey.h"
 #include "motis/paxassign/time_expanded_graph.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
@@ -201,7 +202,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   results_file.close();
 }
 
-std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
+std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched,
     std::map<std::string, std::tuple<double, double, double, double>>&
@@ -539,7 +541,30 @@ std::vector<std::pair<ilp_psg_id, alt_idx>> paxassign::cap_ilp_assignment(
     }
   }
   */
-  return sol.alt_to_use_;
+
+  std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+      cpg_id_to_comp_jrn;
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      auto asg = std::find_if(
+          sol.alt_to_use_.begin(), sol.alt_to_use_.end(),
+          [&cpg](std::pair<std::uint16_t, std::uint16_t> const& p) {
+            return p.first == cpg.id_;
+          });
+      assert(asg != sol.alt_to_use_.end());
+      if (cpg.alternatives_.size() == asg->second) {
+        // NO ROUTE found
+        cpg_id_to_comp_jrn.push_back(
+            {cpg.id_, motis::paxmon::compact_journey{}});
+        continue;
+      } else {
+        cpg_id_to_comp_jrn.push_back(
+            {cpg.id_, cpg.alternatives_[asg->second].compact_journey_});
+      }
+    }
+  }
+
+  return cpg_id_to_comp_jrn;
 
   // throw std::runtime_error("time expanded graph is built");
 
@@ -631,13 +656,12 @@ void paxassign::node_arc_ilp_assignment(
       std::cout << "SELECTED ALTERNATIVE FOR " << cpg.id_
                 << " with psgs: " << cpg.passengers_ << ", planned arr time: "
                 << cpg.groups_.back()->planned_arrival_time_ << std::endl;
-      auto asg =
-          std::find_if(alts_to_use.begin(), alts_to_use.end(),
-                       [&cpg](std::pair<std::uint16_t, std::uint16_t> p) {
-                         return p.first == cpg.id_;
-                       });
+      auto asg = std::find_if(
+          alts_to_use.begin(), alts_to_use.end(),
+          [&cpg](std::pair<std::uint16_t, motis::paxmon::compact_journey> const&
+                     p) { return p.first == cpg.id_; });
 
-      if (cpg.alternatives_.size() == asg->second) {
+      if (asg->second.legs_.empty()) {
         std::cout << "NO ROUTE" << std::endl;
         continue;
       }
@@ -699,6 +723,9 @@ void paxassign::node_arc_ilp_assignment(
             */
     }
   }
+
+  halle_solution_to_compact_j();
+  throw std::runtime_error("time expanded graph is built");
 
   /*
   std::cout << "NODE-ARC APPROACH. Passengers in scenario INPUT : "

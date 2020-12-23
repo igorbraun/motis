@@ -29,11 +29,13 @@ struct paxassign : public motis::module::module {
 private:
   void on_forecast(motis::module::msg_ptr const& msg);
   void on_monitor(const motis::module::msg_ptr& msg);
-  std::vector<std::pair<std::uint16_t, std::uint16_t>> cap_ilp_assignment(
+  std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+  cap_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched,
       std::map<std::string, std::tuple<double, double, double, double>>&
-          variables_with_values, std::ofstream& results_file);
+          variables_with_values,
+      std::ofstream& results_file);
   void node_arc_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched, std::ofstream& results_file);
