@@ -86,7 +86,7 @@ void paxforecast::init(motis::module::registry& reg) {
   }
 
   reg.subscribe("/paxmon/monitoring_update", [&](msg_ptr const& msg) {
-    //on_monitoring_event(msg);
+    on_monitoring_event(msg);
     return nullptr;
   });
 }
@@ -423,7 +423,7 @@ void paxforecast::on_monitoring_event(msg_ptr const& msg) {
     auto const scenario_unix_timestamp = sched.system_time_;
     */
 
-    if ((number_of_affected_groups >= 20 && number_of_affected_groups <= 50) &&
+    if ((number_of_affected_groups >= 1 && number_of_affected_groups <= 50) &&
         any_affected_trip_over_capacity) {
       // optimize this scenario
       LOG(info) << "optimizing scenario";

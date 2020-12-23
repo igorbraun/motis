@@ -60,7 +60,7 @@ void paxassign::init(motis::module::registry& reg) {
     return nullptr;
   });
 
-  reg.subscribe("/paxmon/monitoring_update", [&](msg_ptr const& msg) {
+  reg.register_op("/paxassign/monitoring_update", [&](msg_ptr const& msg) {
     on_monitor(msg);
     return nullptr;
   });
@@ -132,7 +132,6 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
       cpg->groups_.push_back(pg);
     }
   }
-
 
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   std::ofstream results_file("comparison.csv");
