@@ -724,7 +724,7 @@ void paxassign::node_arc_ilp_assignment(
     }
   }
 
-  halle_solution_to_compact_j();
+  node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
   throw std::runtime_error("time expanded graph is built");
 
   /*
