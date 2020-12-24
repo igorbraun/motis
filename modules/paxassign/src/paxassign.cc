@@ -724,7 +724,18 @@ void paxassign::node_arc_ilp_assignment(
     }
   }
 
-  node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
+  std::cout << "start to build compact journeys" << std::endl;
+  auto pg_id_to_cj =
+      node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
+  std::cout << "after building compact journeys" << std::endl;
+  for (auto const& curr_cj : pg_id_to_cj) {
+    std::cout << curr_cj.first << std::endl;
+    for (auto const& l : curr_cj.second.legs_) {
+      std::cout << l.trip_->id_.primary_.train_nr_ << ", "
+                << l.enter_station_id_ << ", " << l.exit_station_id_ << ", "
+                << l.enter_time_ << ", " << l.exit_time_ << ", " << std::endl;
+    }
+  }
   throw std::runtime_error("time expanded graph is built");
 
   /*

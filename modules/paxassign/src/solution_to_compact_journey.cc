@@ -63,6 +63,7 @@ node_arc_solution_to_compact_j(
         }
         curr_trip = e->trip_;
         from_e = e;
+        to_e = e;
       } else {
         to_e = e;
       }
