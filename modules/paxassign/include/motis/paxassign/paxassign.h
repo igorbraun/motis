@@ -27,7 +27,6 @@ struct paxassign : public motis::module::module {
   void init(motis::module::registry&) override;
 
 private:
-  void on_forecast(motis::module::msg_ptr const& msg);
   void on_monitor(const motis::module::msg_ptr& msg);
   std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
   cap_ilp_assignment(
