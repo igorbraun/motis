@@ -26,6 +26,7 @@
 #include "motis/paxassign/build_cap_ILP.h"
 #include "motis/paxassign/build_time_exp_graph.h"
 #include "motis/paxassign/build_whole_graph_ilp.h"
+#include "motis/paxassign/get_edges_from_solutions.h"
 #include "motis/paxassign/heuristic_algo/greedy.h"
 #include "motis/paxassign/heuristic_algo/local_search.h"
 #include "motis/paxassign/perceived_tt.h"
@@ -70,23 +71,6 @@ void paxassign::init(motis::module::registry& reg) {
 void paxassign::toy_scenario(const motis::module::msg_ptr&) {
   std::cout << "paxassign toyscenario" << std::endl;
   // build_toy_scenario();
-}
-
-uint32_t find_edge_idx(trip_data const* td,
-                       motis::paxmon::journey_leg const& leg, bool const from) {
-  auto result_edge =
-      std::find_if(begin(td->edges_), end(td->edges_), [&](auto const& e) {
-        if (from) {
-          return e->from_->station_ == leg.enter_station_id_;
-        } else {
-          return e->to_->station_ == leg.exit_station_id_;
-        }
-      });
-  if (result_edge != end(td->edges_)) {
-    return distance(begin(td->edges_), result_edge);
-  } else {
-    return std::numeric_limits<uint32_t>::max();
-  }
 }
 
 void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
@@ -736,6 +720,16 @@ void paxassign::node_arc_ilp_assignment(
                 << l.enter_time_ << ", " << l.exit_time_ << ", " << std::endl;
     }
   }
+
+  auto node_arc_affected_edges = get_edges_from_solutions(pg_id_to_cj, data);
+
+  for (auto const* e : node_arc_affected_edges) {
+    std::cout
+        << (*sched.merged_trips_[e->trips_]->begin())->id_.primary_.train_nr_
+        << ": " << e->from_->station_ << " to " << e->to_->station_ << " at "
+        << e->from_->time_ << " passengers : " << e->passengers() << std::endl;
+  }
+
   throw std::runtime_error("time expanded graph is built");
 
   /*
