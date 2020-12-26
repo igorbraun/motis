@@ -544,7 +544,18 @@ void paxassign::node_arc_ilp_assignment(
   auto node_arc_affected_edges = get_edges_from_solutions(pg_id_to_cj, data);
   auto halle_affected_edges = get_edges_from_solutions(alts_to_use, data);
 
-  // TODO: Reisendenzuweisung auf edges simulieren und die Auslastung berechnen
+  // TODO: Reisendenzuweisung auf edges simulieren und die Auslastungsstatistik
+  // (z.B. pro Kategorie) berechnen
+  // TODO: echte Daten ausprobieren
+  // TODO: filter für node-arc Ansatz ausprobieren und einstellen
+  // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
+  // wird 
+  // TODO: heuristics: aktuellen Ansatz evaluieren
+  // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
+  // TODO: ggf. nur IC/ICE im Fahrplan lassen und schauen, was mit dem Graph
+  // passiert
+  // TODO: Alternativensuche: Routingergebnisse nach Zeit filtern. Max.
+  // Verspätung darf nicht überschritten werden
 
   throw std::runtime_error("time expanded graph is built");
 }
@@ -560,9 +571,9 @@ void paxassign::heuristic_assignments(
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
 
-  // TODO: for subset-scenario (only long dist stations) nodes validity has the
-  // size of 3,53 mb per psg. If during evaluation it will be too big, remove
-  // nodes validity at all and do all the stuff without it
+  // for subset-scenario (only long dist stations) nodes validity has the size
+  // of 3,53 mb per psg. If during evaluation it will be too big, remove nodes
+  // validity at all and do all the stuff without it
   config_graph_reduction reduction_config;
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
