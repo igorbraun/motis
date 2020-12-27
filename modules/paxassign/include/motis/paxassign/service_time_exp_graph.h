@@ -35,6 +35,7 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                ? (*edge_it)->capacity()
                : std::numeric_limits<std::uint16_t>::max();
   }
+  // CASE WHEN TRIP NOT IN MONITORING GRAPH
   return get_capacity(sched, lc, data.trip_capacity_map_,
                       data.category_capacity_map_)
       .first;

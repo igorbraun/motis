@@ -26,7 +26,7 @@
 #include "motis/paxassign/build_cap_ILP.h"
 #include "motis/paxassign/build_time_exp_graph.h"
 #include "motis/paxassign/build_whole_graph_ilp.h"
-#include "motis/paxassign/get_edges_from_solutions.h"
+#include "motis/paxassign/edges_load_service.h"
 #include "motis/paxassign/heuristic_algo/greedy.h"
 #include "motis/paxassign/heuristic_algo/local_search.h"
 #include "motis/paxassign/perceived_tt.h"
@@ -546,17 +546,24 @@ void paxassign::node_arc_ilp_assignment(
   auto node_arc_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_node_arc, te_graph, sched);
 
-  std::cout << "NODE ARC EDGES LOAD" << std::endl;
-  print_edges_load(node_arc_affected_edges, sched);
-  std::cout << "HALLE EDGES LOAD" << std::endl;
-  print_edges_load(halle_affected_edges, sched);
-
   std::set<eg_edge*> all_affected_edges;
   add_affected_edges_from_sol(halle_affected_edges, all_affected_edges);
   add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);
 
-  // TODO: Reisendenzuweisung auf edges simulieren und die Auslastungsstatistik
-  // (z.B. pro Kategorie) berechnen
+  auto node_arc_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, node_arc_affected_edges);
+  std::cout << "FINAL LOAD NODE ARC" << std::endl;
+  print_edges_load(node_arc_resulting_load, sched);
+
+  auto halle_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, halle_affected_edges);
+  std::cout << "FINAL LOAD HALLE" << std::endl;
+  print_edges_load(halle_resulting_load, sched);
+
+  auto hist_of_halle = get_load_histogram(
+      halle_resulting_load, perc_tt_config.cost_function_capacity_steps_);
+  auto hist_of_node_arc = get_load_histogram(
+      node_arc_resulting_load, perc_tt_config.cost_function_capacity_steps_);
 
   // TODO: echte Daten ausprobieren
   // TODO: filter für node-arc Ansatz ausprobieren und einstellen
