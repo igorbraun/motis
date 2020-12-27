@@ -28,7 +28,7 @@ struct paxassign : public motis::module::module {
 
 private:
   void on_monitor(const motis::module::msg_ptr& msg);
-  std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+  std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
   cap_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched,

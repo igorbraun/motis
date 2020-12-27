@@ -181,7 +181,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   results_file.close();
 }
 
-std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
 paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched,
@@ -469,7 +469,7 @@ paxassign::cap_ilp_assignment(
 
   // print_solution_routes_halle(cap_ILP_scenario, sol.alt_to_use_, sched);
 
-  std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+  std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
       cpg_id_to_comp_jrn;
   for (auto& cgs : combined_groups) {
     for (auto& cpg : cgs.second) {
@@ -481,12 +481,11 @@ paxassign::cap_ilp_assignment(
       assert(asg != sol.alt_to_use_.end());
       if (cpg.alternatives_.size() == asg->second) {
         // NO ROUTE found
-        cpg_id_to_comp_jrn.push_back(
-            {cpg.id_, motis::paxmon::compact_journey{}});
+        cpg_id_to_comp_jrn.push_back({cpg, motis::paxmon::compact_journey{}});
         continue;
       } else {
         cpg_id_to_comp_jrn.push_back(
-            {cpg.id_, cpg.alternatives_[asg->second].compact_journey_});
+            {cpg, cpg.alternatives_[asg->second].compact_journey_});
       }
     }
   }
@@ -511,7 +510,7 @@ void paxassign::node_arc_ilp_assignment(
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
 
-  auto alts_to_use = cap_ilp_assignment(
+  auto cpg_to_cj_halle = cap_ilp_assignment(
       combined_groups, data, sched, variables_with_values_halle, results_file);
 
   node_arc_config na_config{1.2, 30, 6, 10000};
@@ -537,19 +536,32 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
-  // print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
+  print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
-  auto pg_id_to_cj =
+  auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
-  auto node_arc_affected_edges = get_edges_from_solutions(pg_id_to_cj, data);
-  auto halle_affected_edges = get_edges_from_solutions(alts_to_use, data);
+
+  auto halle_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_halle, te_graph, sched);
+  auto node_arc_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_node_arc, te_graph, sched);
+
+  std::cout << "NODE ARC EDGES LOAD" << std::endl;
+  print_edges_load(node_arc_affected_edges, sched);
+  std::cout << "HALLE EDGES LOAD" << std::endl;
+  print_edges_load(halle_affected_edges, sched);
+
+  std::set<eg_edge*> all_affected_edges;
+  add_affected_edges_from_sol(halle_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);
 
   // TODO: Reisendenzuweisung auf edges simulieren und die Auslastungsstatistik
   // (z.B. pro Kategorie) berechnen
+
   // TODO: echte Daten ausprobieren
   // TODO: filter für node-arc Ansatz ausprobieren und einstellen
   // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
-  // wird 
+  // wird
   // TODO: heuristics: aktuellen Ansatz evaluieren
   // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
   // TODO: ggf. nur IC/ICE im Fahrplan lassen und schauen, was mit dem Graph

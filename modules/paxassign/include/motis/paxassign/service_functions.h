@@ -35,4 +35,22 @@ inline uint32_t find_edge_idx(motis::paxmon::trip_data const* td,
   }
 }
 
+inline uint32_t find_edge_idx(eg_trip_data const* td,
+                              motis::paxmon::journey_leg const& leg,
+                              bool const from) {
+  auto result_edge =
+      std::find_if(begin(td->edges_), end(td->edges_), [&](auto const& e) {
+        if (from) {
+          return e->from_->station_ == leg.enter_station_id_;
+        } else {
+          return e->to_->station_ == leg.exit_station_id_;
+        }
+      });
+  if (result_edge != end(td->edges_)) {
+    return distance(begin(td->edges_), result_edge);
+  } else {
+    return std::numeric_limits<uint32_t>::max();
+  }
+}
+
 }  // namespace motis::paxassign

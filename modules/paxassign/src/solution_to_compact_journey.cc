@@ -11,19 +11,19 @@
 #include "motis/paxmon/util/interchange_time.h"
 
 namespace motis::paxassign {
-std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>>
+std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
 node_arc_solution_to_compact_j(
     std::vector<eg_psg_group> const& eg_psg_groups,
     std::vector<std::vector<eg_edge*>> const& na_solution,
     schedule const& sched) {
-  std::vector<std::pair<std::uint16_t, motis::paxmon::compact_journey>> result;
+  std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>> result;
   for (auto i = 0u; i < na_solution.size(); ++i) {
     auto no_route_edge = std::find_if(
         na_solution[i].begin(), na_solution[i].end(),
         [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
     if (no_route_edge != na_solution[i].end()) {
       result.push_back(
-          {eg_psg_groups[i].cpg_.id_, motis::paxmon::compact_journey{}});
+          {eg_psg_groups[i].cpg_, motis::paxmon::compact_journey{}});
       continue;
     }
 
@@ -87,7 +87,7 @@ node_arc_solution_to_compact_j(
       });
     }
 
-    result.push_back({eg_psg_groups[i].cpg_.id_, cj});
+    result.push_back({eg_psg_groups[i].cpg_, cj});
   }
 
   return result;
