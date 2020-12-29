@@ -529,31 +529,44 @@ void paxassign::node_arc_ilp_assignment(
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
                          sched, variables_with_values_halle, results_file);
+
   node_arc_config na_config{1.2, 30, 6, 10000};
-  perceived_tt_config perc_tt_config;
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
 
   std::cout << "NODES IN GRAPH : " << te_graph.nodes_.size() << std::endl;
-  uint32_t nodes_count = 0;
+  uint32_t edges_count = 0;
   for (auto const& n : te_graph.nodes_) {
-    nodes_count += n->out_edges_.size();
+    edges_count += n->out_edges_.size();
   }
-  std::cout << "EDGES IN GRAPH : " << nodes_count << std::endl;
+  std::cout << "EDGES IN GRAPH : " << edges_count << std::endl;
 
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
 
+  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  {
+    logging::scoped_timer reduce_graph_timer{"reduce te graph for passengers"};
+    config_graph_reduction reduction_config;
+    for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+      nodes_validity[i] =
+          reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+    }
+  }
+
+
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_node_arc;
-  auto solution =
-      node_arc_ilp(eg_psg_groups, te_graph, na_config, perc_tt_config, sched,
-                   variables_with_values_node_arc, results_file);
+  perceived_tt_config perc_tt_config;
+  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
+                               na_config, perc_tt_config, sched,
+                               variables_with_values_node_arc, results_file);
 
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
   print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
+  /*
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
 
@@ -580,6 +593,7 @@ void paxassign::node_arc_ilp_assignment(
       halle_resulting_load, perc_tt_config.cost_function_capacity_steps_);
   auto hist_of_node_arc = get_load_histogram(
       node_arc_resulting_load, perc_tt_config.cost_function_capacity_steps_);
+  */
 
   // TODO: filter für node-arc Ansatz ausprobieren und einstellen
   // TODO: echte Daten ausprobieren

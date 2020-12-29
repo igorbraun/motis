@@ -71,21 +71,27 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
   std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
 
   // TIME FILTER
-  auto latest_allowed_time = std::min<uint16_t>(
-      psg_group.cpg_.groups_.back()->planned_arrival_time_ +
-          config.allowed_delay_,
-      unix_to_motistime(sched, module::get_schedule().schedule_end_));
+  {
+    auto latest_allowed_time = std::min<uint16_t>(
+        psg_group.cpg_.groups_.back()->planned_arrival_time_ +
+            config.allowed_delay_,
+        unix_to_motistime(sched, module::get_schedule().schedule_end_));
 
-  for (auto i = 0u; i < te_graph.nodes_.size(); ++i) {
-    if (te_graph.nodes_[i]->id_ == psg_group.to_->id_ ||
-        te_graph.nodes_[i]->id_ == psg_group.from_->id_)
-      continue;
-    if (te_graph.nodes_[i]->time_ > latest_allowed_time) {
-      nodes_validity[te_graph.nodes_[i]->id_] = false;
+    for (auto i = 0u; i < te_graph.nodes_.size(); ++i) {
+      if (te_graph.nodes_[i]->id_ == psg_group.to_->id_ ||
+          te_graph.nodes_[i]->id_ == psg_group.from_->id_)
+        continue;
+      if (te_graph.nodes_[i]->time_ > latest_allowed_time) {
+        nodes_validity[te_graph.nodes_[i]->id_] = false;
+      }
     }
+
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    std::cout << "result after time filter: " << valid_count << " / "
+              << te_graph.nodes_.size() << std::endl;
   }
 
-  return nodes_validity;
   // INTERCHANGE FILTER
   {
     logging::scoped_timer interchanges_filter{"interchanges filter"};
@@ -105,9 +111,10 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
                            nodes_validity, calc_dist_interchanges);
     filter_nodes<uint16_t>(nodes_validity, backward_inch_filter_res,
                            config.max_interchanges_);
+
     auto valid_count =
         std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
-    std::cout << "result after inch_filter: " << valid_count << " from "
+    std::cout << "result after interchanges filter: " << valid_count << " from "
               << te_graph.nodes_.size() << std::endl;
   }
 
@@ -127,11 +134,14 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
         dijkstra<double>(dijkstra_type::BACKWARD, psg_group.to_, 0.0,
                          std::numeric_limits<double>::max(), te_graph,
                          nodes_validity, calc_dist_cap_util);
+    filter_nodes<double>(nodes_validity, backw_cap_util_filter_res,
+                         config.max_cap_utilization_);
     auto valid_count =
         std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
     std::cout << "result after cap util: " << valid_count << " from "
               << te_graph.nodes_.size() << std::endl;
   }
+  return nodes_validity;
 
   // CLASSES FILTER, NEEDS RESULTS OF BOTH, FORWARD AND BACKWARD SEARCHES
   {
