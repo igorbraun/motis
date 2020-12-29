@@ -31,7 +31,7 @@ private:
   std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
   cap_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-      paxmon_data& data, schedule const& sched,
+      paxmon_data& data, uint16_t const allowed_delay, schedule const& sched,
       std::map<std::string, std::tuple<double, double, double, double>>&
           variables_with_values,
       std::ofstream& results_file);

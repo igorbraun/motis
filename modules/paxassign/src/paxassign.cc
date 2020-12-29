@@ -184,7 +184,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
 paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-    paxmon_data& data, schedule const& sched,
+    paxmon_data& data, uint16_t const allowed_delay, schedule const& sched,
     std::map<std::string, std::tuple<double, double, double, double>>&
         variables_with_values,
     std::ofstream& results_file) {
@@ -217,6 +217,7 @@ paxassign::cap_ilp_assignment(
     scoped_timer alt_trips_timer{"add alternatives to graph"};
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
+        /*
         for (auto const& grp : cpg.groups_) {
           std::cout << "paxmon::passenger_group.id_ : " << grp->id_
                     << ", source primary ref: " << grp->source_.primary_ref_
@@ -224,18 +225,31 @@ paxassign::cap_ilp_assignment(
                     << ", planned arrival time: " << grp->planned_arrival_time_
                     << std::endl;
         }
+        */
         size_t curr_alt_ind = 0;
         while (curr_alt_ind < cpg.alternatives_.size()) {
           bool remove_alt = false;
-          for (auto const [leg_idx, leg] : utl::enumerate(
-                   cpg.alternatives_[curr_alt_ind].compact_journey_.legs_)) {
-            auto td = get_or_add_trip(sched, data, leg.trip_);
-            auto const leg_first_edge_idx = find_edge_idx(td, leg, true);
-            auto const leg_last_edge_idx = find_edge_idx(td, leg, false);
-            if (leg_first_edge_idx == std::numeric_limits<uint32_t>::max() ||
-                leg_last_edge_idx == std::numeric_limits<uint32_t>::max()) {
-              remove_alt = true;
-              break;
+          if ((cpg.alternatives_[curr_alt_ind]
+                   .compact_journey_.legs_.back()
+                   .exit_time_ >= cpg.groups_.back()->planned_arrival_time_) &&
+              (cpg.alternatives_[curr_alt_ind]
+                       .compact_journey_.legs_.back()
+                       .exit_time_ -
+                   cpg.groups_.back()->planned_arrival_time_ >
+               allowed_delay)) {
+            remove_alt = true;
+          }
+          if (!remove_alt) {
+            for (auto const [leg_idx, leg] : utl::enumerate(
+                     cpg.alternatives_[curr_alt_ind].compact_journey_.legs_)) {
+              auto td = get_or_add_trip(sched, data, leg.trip_);
+              auto const leg_first_edge_idx = find_edge_idx(td, leg, true);
+              auto const leg_last_edge_idx = find_edge_idx(td, leg, false);
+              if (leg_first_edge_idx == std::numeric_limits<uint32_t>::max() ||
+                  leg_last_edge_idx == std::numeric_limits<uint32_t>::max()) {
+                remove_alt = true;
+                break;
+              }
             }
           }
           if (remove_alt) {
@@ -510,9 +524,11 @@ void paxassign::node_arc_ilp_assignment(
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
 
-  auto cpg_to_cj_halle = cap_ilp_assignment(
-      combined_groups, data, sched, variables_with_values_halle, results_file);
+  config_graph_reduction graph_red_config{};
 
+  auto cpg_to_cj_halle =
+      cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
+                         sched, variables_with_values_halle, results_file);
   node_arc_config na_config{1.2, 30, 6, 10000};
   perceived_tt_config perc_tt_config;
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
@@ -565,16 +581,14 @@ void paxassign::node_arc_ilp_assignment(
   auto hist_of_node_arc = get_load_histogram(
       node_arc_resulting_load, perc_tt_config.cost_function_capacity_steps_);
 
-  // TODO: echte Daten ausprobieren
   // TODO: filter für node-arc Ansatz ausprobieren und einstellen
+  // TODO: echte Daten ausprobieren
   // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
   // wird
   // TODO: heuristics: aktuellen Ansatz evaluieren
   // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
   // TODO: ggf. nur IC/ICE im Fahrplan lassen und schauen, was mit dem Graph
   // passiert
-  // TODO: Alternativensuche: Routingergebnisse nach Zeit filtern. Max.
-  // Verspätung darf nicht überschritten werden
 
   throw std::runtime_error("time expanded graph is built");
 }
