@@ -113,6 +113,13 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     }
   }
 
+  int group_size = 0;
+  for (auto const& cg : combined_groups) {
+    group_size += cg.second.size();
+  }
+  std::ofstream group_sizes("group_sizes.txt", std::ios_base::app);
+  group_sizes << group_size << "\n";
+
   std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   std::ofstream results_file("comparison.csv");
   results_file << "ID,Halle_obj,NA_obj\n";
@@ -176,9 +183,10 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  node_arc_ilp_assignment(combined_groups, data, sched, results_file);
+  // node_arc_ilp_assignment(combined_groups, data, sched, results_file);
   // heuristic_assignments(combined_groups, data, sched);
   results_file.close();
+  group_sizes.close();
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -553,7 +561,6 @@ void paxassign::node_arc_ilp_assignment(
     }
   }
 
-
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_node_arc;
   perceived_tt_config perc_tt_config;
@@ -595,7 +602,6 @@ void paxassign::node_arc_ilp_assignment(
       node_arc_resulting_load, perc_tt_config.cost_function_capacity_steps_);
   */
 
-  // TODO: filter für node-arc Ansatz ausprobieren und einstellen
   // TODO: echte Daten ausprobieren
   // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
   // wird
