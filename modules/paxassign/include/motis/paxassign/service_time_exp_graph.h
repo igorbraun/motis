@@ -30,14 +30,11 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                               event_types_comp(e->from_->type_, from->type_) &&
                               event_types_comp(e->to_->type_, to->type_);
                      });
-    assert(edge_it != std::end(td->edges_));
-    try {
-      auto cap = (*edge_it)->has_capacity()
-                     ? (*edge_it)->capacity()
-                     : std::numeric_limits<std::uint16_t>::max();
-      return cap;
-    } catch (...) {
-      std::cout << "Exception in get_edge_overall_capacity" << std::endl;
+    if (edge_it != td->edges_.end()) {
+      return (*edge_it)->has_capacity()
+                 ? (*edge_it)->capacity()
+                 : std::numeric_limits<std::uint16_t>::max();
+    } else {
       return std::numeric_limits<std::uint16_t>::max();
     }
   }
