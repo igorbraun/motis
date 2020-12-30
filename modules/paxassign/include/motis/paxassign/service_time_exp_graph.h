@@ -16,10 +16,14 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                                         light_connection const& lc,
                                         paxmon_data const& data,
                                         schedule const& sched) {
+  std::cout << "20" << std::endl;
   auto inspected_trp = get_trip(sched, et);
+  std::cout << "21" << std::endl;
   if (data.graph_.trip_data_.find(inspected_trp) !=
       data.graph_.trip_data_.end()) {
+    std::cout << "21" << std::endl;
     auto td = data.graph_.trip_data_.find(inspected_trp)->second.get();
+    std::cout << "22" << std::endl;
     auto edge_it =
         std::find_if(std::begin(td->edges_), std::end(td->edges_),
                      [&](motis::paxmon::edge const* e) {
@@ -30,12 +34,19 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                               event_types_comp(e->from_->type_, from->type_) &&
                               event_types_comp(e->to_->type_, to->type_);
                      });
+    std::cout << "23" << std::endl;
     assert(edge_it != std::end(td->edges_));
+    std::cout << "24" << std::endl;
     return (*edge_it)->has_capacity()
                ? (*edge_it)->capacity()
                : std::numeric_limits<std::uint16_t>::max();
   }
   // CASE WHEN TRIP NOT IN MONITORING GRAPH
+  std::cout << "capacity not found in monitoring graph" << std::endl;
+  data.category_capacity_map_;
+  std::cout << "25" << std::endl;
+  data.trip_capacity_map_;
+  std::cout << "26" << std::endl;
   return get_capacity(sched, lc, data.trip_capacity_map_,
                       data.category_capacity_map_)
       .first;
