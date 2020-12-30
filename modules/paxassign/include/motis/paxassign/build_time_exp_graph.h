@@ -344,32 +344,44 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
     schedule const& sched, node_arc_config const& config,
     time_expanded_graph& te_graph) {
   std::vector<eg_psg_group> eg_psg_groups;
+  {
+    logging::scoped_timer alt_timer{"add passengers to te graph"};
 
-  for (auto& cgs : combined_groups) {
-    for (auto& cpg : cgs.second) {
-      eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
-      auto target_node = te_graph.nodes_
-                             .emplace_back(std::make_unique<eg_event_node>(
-                                 eg_event_node{INVALID_TIME,
-                                               eg_event_type::ARR,
-                                               cpg.destination_station_id_,
-                                               {},
-                                               {},
-                                               te_graph.nodes_.size()}))
-                             .get();
-      te_graph.st_to_nodes_[cpg.destination_station_id_].push_back(target_node);
-      for (auto& n : te_graph.nodes_) {
-        if (n.get() != target_node &&
-            n->station_ == cpg.destination_station_id_ &&
-            n->type_ == eg_event_type::ARR) {
-          motis::paxassign::add_not_in_trip_edge(
-              n.get(), target_node, eg_edge_type::FINISH, 0, te_graph);
+    for (auto& cgs : combined_groups) {
+      for (auto& cpg : cgs.second) {
+        std::cout << "1" << std::endl;
+        eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
+        std::cout << "2" << std::endl;
+        auto target_node = te_graph.nodes_
+                               .emplace_back(std::make_unique<eg_event_node>(
+                                   eg_event_node{INVALID_TIME,
+                                                 eg_event_type::ARR,
+                                                 cpg.destination_station_id_,
+                                                 {},
+                                                 {},
+                                                 te_graph.nodes_.size()}))
+                               .get();
+        std::cout << "3" << std::endl;
+        te_graph.st_to_nodes_[cpg.destination_station_id_].push_back(
+            target_node);
+        std::cout << "4" << std::endl;
+        for (auto& n : te_graph.nodes_) {
+          if (n.get() != target_node &&
+              n->station_ == cpg.destination_station_id_ &&
+              n->type_ == eg_event_type::ARR) {
+            motis::paxassign::add_not_in_trip_edge(
+                n.get(), target_node, eg_edge_type::FINISH, 0, te_graph);
+          }
         }
+        std::cout << "5" << std::endl;
+        motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
+                                               eg_edge_type::NO_ROUTE,
+                                               config.no_route_cost_, te_graph);
+        std::cout << "6" << std::endl;
+        eg_psg_groups.push_back(
+            {cpg, at_ev_node, target_node, cpg.passengers_});
+        std::cout << "7" << std::endl;
       }
-      motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
-                                             eg_edge_type::NO_ROUTE,
-                                             config.no_route_cost_, te_graph);
-      eg_psg_groups.push_back({cpg, at_ev_node, target_node, cpg.passengers_});
     }
   }
   return eg_psg_groups;
