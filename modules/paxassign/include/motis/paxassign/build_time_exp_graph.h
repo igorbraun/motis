@@ -101,10 +101,8 @@ std::vector<eg_edge*> add_trip(schedule const& sched,
                                           g.nodes_.size()}))
                         .get();
     g.st_to_nodes_[arr_node->station_].push_back(arr_node);
-    std::cout << "12" << std::endl;
     auto soft_capacity =
         get_edge_overall_capacity(dep_node, arr_node, et, lc, data, sched);
-    std::cout << "13" << std::endl;
     auto hard_capacity =
         static_cast<std::uint16_t>(config.hard_capacity_ratio_ * soft_capacity);
     auto capacity_utilization =
