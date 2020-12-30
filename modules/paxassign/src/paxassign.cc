@@ -120,7 +120,6 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::ofstream group_sizes("group_sizes.txt", std::ios_base::app);
   group_sizes << group_size << "\n";
 
-  std::cout << "size of comb groups: " << combined_groups.size() << std::endl;
   std::ofstream results_file("comparison.csv");
   results_file << "ID,Halle_obj,NA_obj\n";
   uint16_t curr_scenario_id = 0;
@@ -183,7 +182,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  // node_arc_ilp_assignment(combined_groups, data, sched, results_file);
+  node_arc_ilp_assignment(combined_groups, data, sched, results_file);
   // heuristic_assignments(combined_groups, data, sched);
   results_file.close();
   group_sizes.close();
@@ -533,11 +532,11 @@ void paxassign::node_arc_ilp_assignment(
       variables_with_values_halle;
 
   config_graph_reduction graph_red_config{};
-
+  /*
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
                          sched, variables_with_values_halle, results_file);
-
+*/
   node_arc_config na_config{1.2, 30, 6, 10000};
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
 
@@ -560,7 +559,7 @@ void paxassign::node_arc_ilp_assignment(
           reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
     }
   }
-
+  return;
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_node_arc;
   perceived_tt_config perc_tt_config;
