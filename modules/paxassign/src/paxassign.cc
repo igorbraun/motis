@@ -532,11 +532,11 @@ void paxassign::node_arc_ilp_assignment(
       variables_with_values_halle;
 
   config_graph_reduction graph_red_config{};
-  /*
+
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
                          sched, variables_with_values_halle, results_file);
-  */
+
   node_arc_config na_config{1.2, 30, 6, 10000};
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
 
@@ -559,7 +559,7 @@ void paxassign::node_arc_ilp_assignment(
           reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
     }
   }
-  return;
+
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_node_arc;
   perceived_tt_config perc_tt_config;
@@ -570,7 +570,7 @@ void paxassign::node_arc_ilp_assignment(
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
-  print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
+  //print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
   /*
   auto cpg_to_cj_node_arc =
@@ -601,7 +601,6 @@ void paxassign::node_arc_ilp_assignment(
       node_arc_resulting_load, perc_tt_config.cost_function_capacity_steps_);
   */
 
-  // TODO: echte Daten ausprobieren
   // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
   // wird
   // TODO: heuristics: aktuellen Ansatz evaluieren
