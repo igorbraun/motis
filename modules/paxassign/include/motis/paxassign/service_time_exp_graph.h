@@ -35,7 +35,7 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                  ? (*edge_it)->capacity()
                  : std::numeric_limits<std::uint16_t>::max();
     } else {
-      return std::numeric_limits<std::uint16_t>::max();
+      return 1;
     }
   }
   // CASE WHEN TRIP NOT IN MONITORING GRAPH
@@ -69,7 +69,7 @@ double get_edge_capacity_utilization(eg_event_node const* from,
                      : std::numeric_limits<std::uint16_t>::max();
       return (double)(*edge_it)->passengers() / cap;
     } else {
-      return 0.0;
+      return std::numeric_limits<double>::max();
     }
   }
   return 0.0;
@@ -95,7 +95,7 @@ std::uint16_t get_edge_psgs(eg_event_node const* from, eg_event_node const* to,
     if (edge_it != td->edges_.end()) {
       return (*edge_it)->passengers();
     } else {
-      return 0;
+      return std::numeric_limits<double>::max();;
     }
   }
   return 0;
