@@ -536,7 +536,7 @@ void paxassign::node_arc_ilp_assignment(
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
                          sched, variables_with_values_halle, results_file);
-*/
+  */
   node_arc_config na_config{1.2, 30, 6, 10000};
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
 
