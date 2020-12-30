@@ -608,7 +608,7 @@ void paxassign::node_arc_ilp_assignment(
   // TODO: ggf. nur IC/ICE im Fahrplan lassen und schauen, was mit dem Graph
   // passiert
 
-  throw std::runtime_error("time expanded graph is built");
+  //throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
