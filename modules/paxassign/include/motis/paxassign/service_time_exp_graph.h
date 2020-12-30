@@ -67,7 +67,7 @@ double get_edge_capacity_utilization(eg_event_node const* from,
       auto cap = (*edge_it)->has_capacity()
                      ? (*edge_it)->capacity()
                      : std::numeric_limits<std::uint16_t>::max();
-      return static_cast<double>((*edge_it)->passengers() / cap);
+      return (double)(*edge_it)->passengers() / cap;
     } else {
       return 0.0;
     }
