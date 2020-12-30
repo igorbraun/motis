@@ -31,6 +31,7 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                               event_types_comp(e->to_->type_, to->type_);
                      });
     if (edge_it != td->edges_.end()) {
+      std::cout << "not end:" << std::endl;
       return (*edge_it)->has_capacity()
                  ? (*edge_it)->capacity()
                  : std::numeric_limits<std::uint16_t>::max();
