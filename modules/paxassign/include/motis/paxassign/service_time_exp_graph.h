@@ -31,7 +31,6 @@ std::uint16_t get_edge_overall_capacity(eg_event_node const* from,
                               event_types_comp(e->to_->type_, to->type_);
                      });
     if (edge_it != td->edges_.end()) {
-      std::cout << "not end:" << std::endl;
       return (*edge_it)->has_capacity()
                  ? (*edge_it)->capacity()
                  : std::numeric_limits<std::uint16_t>::max();
@@ -64,12 +63,14 @@ double get_edge_capacity_utilization(eg_event_node const* from,
                               event_types_comp(e->from_->type_, from->type_) &&
                               event_types_comp(e->to_->type_, to->type_);
                      });
-    assert(edge_it != std::end(td->edges_));
-    auto cap = (*edge_it)->has_capacity()
-                   ? (*edge_it)->capacity()
-                   : std::numeric_limits<std::uint16_t>::max();
-
-    return static_cast<double>((*edge_it)->passengers() / cap);
+    if (edge_it != td->edges_.end()) {
+      auto cap = (*edge_it)->has_capacity()
+                     ? (*edge_it)->capacity()
+                     : std::numeric_limits<std::uint16_t>::max();
+      return static_cast<double>((*edge_it)->passengers() / cap);
+    } else {
+      return 0.0;
+    }
   }
   return 0.0;
 }
@@ -91,8 +92,11 @@ std::uint16_t get_edge_psgs(eg_event_node const* from, eg_event_node const* to,
                               event_types_comp(e->from_->type_, from->type_) &&
                               event_types_comp(e->to_->type_, to->type_);
                      });
-    assert(edge_it != std::end(td->edges_));
-    return (*edge_it)->passengers();
+    if (edge_it != td->edges_.end()) {
+      return (*edge_it)->passengers();
+    } else {
+      return 0;
+    }
   }
   return 0;
 }
