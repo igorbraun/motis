@@ -292,7 +292,7 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
   if (cpg.localization_.in_trip()) {
     auto tr_data = te_graph.trip_data_.find(
         to_extern_trip(sched, cpg.localization_.in_trip_));
-    if (tr_data != te_graph.trip_data_.end()) {
+    if (tr_data == te_graph.trip_data_.end()) {
       std::cout << "End 1" << std::endl;
     }
     assert(tr_data != te_graph.trip_data_.end());
@@ -304,7 +304,7 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                  cpg.localization_.current_arrival_time_ == e_ptr->to_->time_;
         });
     // TODO: here?
-    if (at_edge != tr_data->second->edges_.end()) {
+    if (at_edge == tr_data->second->edges_.end()) {
       std::cout << "End 2" << std::endl;
       std::cout << "Looking for " << cpg.localization_.at_station_->index_
                 << " at  " << cpg.localization_.current_arrival_time_
