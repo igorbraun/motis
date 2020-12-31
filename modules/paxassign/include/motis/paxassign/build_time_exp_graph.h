@@ -303,7 +303,6 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                      cpg.localization_.at_station_->index_ &&
                  cpg.localization_.current_arrival_time_ == e_ptr->to_->time_;
         });
-    // TODO: here?
     if (at_edge == tr_data->second->edges_.end()) {
       std::cout << "End 2" << std::endl;
       std::cout << "Looking for " << cpg.localization_.at_station_->index_
@@ -363,9 +362,7 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
 
     for (auto& cgs : combined_groups) {
       for (auto& cpg : cgs.second) {
-        std::cout << "1" << std::endl;
         eg_event_node* at_ev_node = get_localization_node(cpg, te_graph, sched);
-        std::cout << "2" << std::endl;
         auto target_node = te_graph.nodes_
                                .emplace_back(std::make_unique<eg_event_node>(
                                    eg_event_node{INVALID_TIME,
@@ -375,10 +372,8 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
                                                  {},
                                                  te_graph.nodes_.size()}))
                                .get();
-        std::cout << "3" << std::endl;
         te_graph.st_to_nodes_[cpg.destination_station_id_].push_back(
             target_node);
-        std::cout << "4" << std::endl;
         for (auto& n : te_graph.nodes_) {
           if (n.get() != target_node &&
               n->station_ == cpg.destination_station_id_ &&
@@ -387,14 +382,11 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
                 n.get(), target_node, eg_edge_type::FINISH, 0, te_graph);
           }
         }
-        std::cout << "5" << std::endl;
         motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
                                                eg_edge_type::NO_ROUTE,
                                                config.no_route_cost_, te_graph);
-        std::cout << "6" << std::endl;
         eg_psg_groups.push_back(
             {cpg, at_ev_node, target_node, cpg.passengers_});
-        std::cout << "7" << std::endl;
       }
     }
   }
