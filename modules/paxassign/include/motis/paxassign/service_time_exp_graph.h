@@ -95,7 +95,7 @@ std::uint16_t get_edge_psgs(eg_event_node const* from, eg_event_node const* to,
     if (edge_it != td->edges_.end()) {
       return (*edge_it)->passengers();
     } else {
-      return std::numeric_limits<double>::max();;
+      return std::numeric_limits<std::uint16_t>::max();
     }
   }
   return 0;
