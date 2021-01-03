@@ -520,10 +520,10 @@ void paxassign::node_arc_ilp_assignment(
     paxmon_data& data, schedule const& sched) {
   std::time_t unique_key = std::time(nullptr);
 
-  std::string scenario_stats_f_name = "halle_vs_na/10_scenario_stats.csv";
-  std::string reducing_stats_f_name = "halle_vs_na/10_reducing_stats.csv";
-  std::string solution_compar_f_name = "halle_vs_na/10_solutions_comp.csv";
-  std::string loads_f_name = "halle_vs_na/10_loads.csv";
+  std::string scenario_stats_f_name = "halle_vs_na/20_scenario_stats.csv";
+  std::string reducing_stats_f_name = "halle_vs_na/20_reducing_stats.csv";
+  std::string solution_compar_f_name = "halle_vs_na/20_solutions_comp.csv";
+  std::string loads_f_name = "halle_vs_na/20_loads.csv";
 
   bool scenario_stats_f_existed =
       std::filesystem::exists(scenario_stats_f_name);
