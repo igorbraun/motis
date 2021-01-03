@@ -22,10 +22,12 @@ std::map<eg_edge*, uint32_t> get_edges_load_from_solutions(
   for (auto const& asg : assignments) {
     for (auto const [leg_idx, leg] : utl::enumerate(asg.second.legs_)) {
 
-      std::cout << "1" << std::endl;
+      if (te_graph.trip_data_.find(to_extern_trip(sched, leg.trip_)) ==
+          te_graph.trip_data_.end()) {
+        continue;
+      }
       auto const td =
           te_graph.trip_data_.at(to_extern_trip(sched, leg.trip_)).get();
-      std::cout << "2" << std::endl;
 
       auto start_edge_idx = find_edge_idx(td, leg, true);
       auto last_edge_idx = find_edge_idx(td, leg, false);
@@ -49,9 +51,7 @@ std::map<eg_edge*, uint32_t> get_final_edges_load_for_solution(
   for (auto* e : all_affected_edges) {
     resulting_load[e] = e->passengers_;
     if (loads_from_sol.find(e) != loads_from_sol.end()) {
-      std::cout << "3" << std::endl;
       resulting_load[e] += loads_from_sol.at(e);
-      std::cout << "4" << std::endl;
     }
   }
   return resulting_load;
