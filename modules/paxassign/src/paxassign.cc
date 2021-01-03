@@ -204,7 +204,7 @@ paxassign::cap_ilp_assignment(
   auto alternatives_found = 0ULL;
 
   {
-    scoped_timer alt_timer{"find alternatives"};
+    scoped_timer alt_timer{"find alternatives (paxassign)"};
     std::vector<ctx::future_ptr<ctx_data, void>> futures;
     for (auto& cgs : combined_groups) {
       auto const destination_station_id = cgs.first;
@@ -236,6 +236,9 @@ paxassign::cap_ilp_assignment(
         size_t curr_alt_ind = 0;
         while (curr_alt_ind < cpg.alternatives_.size()) {
           bool remove_alt = false;
+          if (cpg.alternatives_[curr_alt_ind].compact_journey_.legs_.empty()) {
+            remove_alt = true;
+          }
           if ((cpg.alternatives_[curr_alt_ind]
                    .compact_journey_.legs_.back()
                    .exit_time_ >= cpg.groups_.back()->planned_arrival_time_) &&

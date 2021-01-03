@@ -29,7 +29,7 @@ compact_journey to_compact_journey(journey const& j, schedule const& sched) {
                                           enter_time, exit_time, ti});
       });
 
-  utl::verify(!cj.legs_.empty(), "to_compact_journey: empty journey");
+  //utl::verify(!cj.legs_.empty(), "to_compact_journey: empty journey");
 
   return cj;
 }
