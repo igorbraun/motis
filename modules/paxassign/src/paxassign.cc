@@ -752,7 +752,7 @@ void paxassign::node_arc_ilp_assignment(
   // TODO: heuristics: aktuellen Ansatz evaluieren
   // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
 
-  throw std::runtime_error("time expanded graph is built");
+  //throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
