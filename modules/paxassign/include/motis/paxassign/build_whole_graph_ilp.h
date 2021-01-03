@@ -17,6 +17,8 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
         variables_with_values,
     std::ofstream& results_file) {
   try {
+    auto start = std::chrono::steady_clock::now();
+
     GRBEnv env = GRBEnv(true);
     // env.set("LogFile", scenario_id + ".log");
     env.start();
@@ -265,14 +267,19 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     }
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+
+    auto end = std::chrono::steady_clock::now();
+    auto time_building_ILP =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    results_file << time_building_ILP << ",";
+
     model.optimize();
 
     int status = model.get(GRB_IntAttr_Status);
     if (status != GRB_OPTIMAL) {
       throw std::runtime_error("node-arc-form ILP model: solution not optimal");
     }
-
-    results_file << model.get(GRB_DoubleAttr_ObjVal) << "\n";
 
     for (auto const& ecv : edge_cost_vars) {
       for (auto const& curr_ecv : ecv.second) {
@@ -308,6 +315,13 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     }
 
     std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
+
+    results_file << model.get(GRB_DoubleAttr_ObjVal) << ","
+                 << model.get(GRB_DoubleAttr_Runtime) << ","
+                 << model.get(GRB_IntAttr_NumVars) << ","
+                 << model.get(GRB_IntAttr_NumGenConstrs) +
+                        model.get(GRB_IntAttr_NumConstrs)
+                 << ",";
 
     // model.write("motis/build/rel/ilp_files/node_arc.sol");
     // model.write("motis/build/rel/ilp_files/node_arc.lp");

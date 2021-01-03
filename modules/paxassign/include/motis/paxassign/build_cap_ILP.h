@@ -18,6 +18,8 @@ cap_ILP_solution build_ILP_from_scenario_API(
         variables_with_values,
     std::ofstream& results_file) {
   try {
+    auto start = std::chrono::steady_clock::now();
+
     std::set<cap_ILP_edge*> handled_edges;
     std::map<cap_ILP_edge*, std::set<cap_ILP_psg_group const*>> edge_to_psgs;
 
@@ -192,6 +194,12 @@ cap_ILP_solution build_ILP_from_scenario_API(
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
     // model.write("motis/build/rel/ilp_files/" + scenario_id + ".lp");
 
+    auto end = std::chrono::steady_clock::now();
+    auto time_building_ILP =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    results_file << time_building_ILP << ",";
+
     model.optimize();
 
     // model.write("motis/build/rel/ilp_files/" + scenario_id + ".sol");
@@ -218,8 +226,6 @@ cap_ILP_solution build_ILP_from_scenario_API(
         ++i;
       }
     }
-
-    results_file << model.get(GRB_DoubleAttr_ObjVal) << ",";
 
     for (auto const& arv : alt_route_vars) {
       for (auto const& curr_arv : arv) {
@@ -250,6 +256,14 @@ cap_ILP_solution build_ILP_from_scenario_API(
                       model.get(GRB_DoubleAttr_ObjVal)},
         alt_to_use};
     std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
+
+    results_file << model.get(GRB_DoubleAttr_ObjVal) << ","
+                 << model.get(GRB_DoubleAttr_Runtime) << ","
+                 << model.get(GRB_IntAttr_NumVars) << ","
+                 << model.get(GRB_IntAttr_NumGenConstrs) +
+                        model.get(GRB_IntAttr_NumConstrs)
+                 << "\n";
+
     return solution;
 
   } catch (GRBException e) {

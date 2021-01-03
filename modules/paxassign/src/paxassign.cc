@@ -1,5 +1,8 @@
 #include "motis/paxassign/paxassign.h"
 
+#include <chrono>
+#include <ctime>
+#include <filesystem>
 #include <iosfwd>
 #include <iostream>
 
@@ -117,63 +120,43 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
-  std::ofstream group_sizes("group_sizes.txt", std::ios_base::app);
-  group_sizes << group_size << "\n";
-
-  std::ofstream results_file("comparison.csv");
-  results_file << "ID,Halle_obj,NA_obj\n";
-  uint16_t curr_scenario_id = 0;
   /*
-  for (auto& cgs : combined_groups) {
-    for (auto& cpg : cgs.second) {
-      // first block
-      bool contains_needed_group = false;
-      for (auto const& grp : cpg.groups_) {
-        if (grp->id_ == 155721) {  // grp->id_ == 83364 || grp->id_ == 125658 ||
-          // 35042 - one psg with 215 min
-          contains_needed_group = true;
-        }
-      }
+   for (auto& cgs : combined_groups) {
+     for (auto& cpg : cgs.second) {
+       // first block
+       bool contains_needed_group = false;
+       for (auto const& grp : cpg.groups_) {
+         if (grp->id_ == 155721) {  // grp->id_ == 83364 || grp->id_ == 125658
+   ||
+           // 35042 - one psg with 215 min
+           contains_needed_group = true;
+         }
+       }
 
-      if (contains_needed_group) {
-        std::cout
-            << sched.stations_[cgs.first]->name_ << " to "
-            << sched.stations_[cpg.localization_.at_station_->index_]->name_
-            << ", psgrs: " << cpg.passengers_ << std::endl;
+       if (contains_needed_group) {
+         std::cout
+             << sched.stations_[cgs.first]->name_ << " to "
+             << sched.stations_[cpg.localization_.at_station_->index_]->name_
+             << ", psgrs: " << cpg.passengers_ << std::endl;
 
-        std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
-        auto& g = selected_combined_groups[cgs.first];
-        g.push_back(combined_pg{cpg});
-        node_arc_ilp_assignment(selected_combined_groups, data, sched,
-                                results_file);
-      }
+         std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
+         auto& g = selected_combined_groups[cgs.first];
+         g.push_back(combined_pg{cpg});
+         node_arc_ilp_assignment(selected_combined_groups, data, sched,
+                                 results_file);
+       }
 
-      // second block
-      std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
-      auto& g = selected_combined_groups[cgs.first];
-      g.push_back(combined_pg{cpg});
-      results_file << curr_scenario_id++ << ",";
-      node_arc_ilp_assignment(selected_combined_groups, data, sched,
-                              results_file);
+       // second block
+       std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
+       auto& g = selected_combined_groups[cgs.first];
+       g.push_back(combined_pg{cpg});
+       results_file << curr_scenario_id++ << ",";
+       node_arc_ilp_assignment(selected_combined_groups, data, sched,
+                               results_file);
 
-    }
-  }
-  */
-
-  // throw std::runtime_error("the end");
-
-  /*
-  std::uint16_t needed_group_idx = 0;
-  for (auto j = 0u; j < combined_groups[65019].size(); ++j) {
-    if (combined_groups[65019][j].groups_[0]->planned_arrival_time_ == 7662) {
-      needed_group_idx = j;
-    }
-  }
-
-  std::map<unsigned, std::vector<combined_pg>> selected_combined_groups;
-  auto& g = selected_combined_groups[65019];
-  g.push_back(combined_pg{combined_groups[65019][needed_group_idx]});
-  */
+     }
+   }
+   */
 
   if (combined_groups.empty()) {
     return;
@@ -182,10 +165,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  node_arc_ilp_assignment(combined_groups, data, sched, results_file);
+  node_arc_ilp_assignment(combined_groups, data, sched);
   // heuristic_assignments(combined_groups, data, sched);
-  results_file.close();
-  group_sizes.close();
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -205,6 +186,9 @@ paxassign::cap_ilp_assignment(
 
   {
     scoped_timer alt_timer{"find alternatives (paxassign)"};
+
+    auto start = std::chrono::steady_clock::now();
+
     std::vector<ctx::future_ptr<ctx_data, void>> futures;
     for (auto& cgs : combined_groups) {
       auto const destination_station_id = cgs.first;
@@ -218,8 +202,15 @@ paxassign::cap_ilp_assignment(
       }
     }
     ctx::await_all(futures);
+
+    auto end = std::chrono::steady_clock::now();
+    auto time_finding_alternatives =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    results_file << time_finding_alternatives << ",";
   }
 
+  auto start = std::chrono::steady_clock::now();
   {
     scoped_timer alt_trips_timer{"add alternatives to graph"};
     for (auto& cgs : combined_groups) {
@@ -308,6 +299,7 @@ paxassign::cap_ilp_assignment(
 
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
+  results_file << routing_requests << "," << alternatives_found << ",";
 
   std::map<std::uint16_t, combined_pg*> cpg_id_to_group;
   uint32_t curr_e_id = 1;
@@ -475,6 +467,12 @@ paxassign::cap_ilp_assignment(
     }
   }
 
+  auto end = std::chrono::steady_clock::now();
+  auto time_preprocessing_halle_ILP =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  results_file << time_preprocessing_halle_ILP << ",";
+
   cap_ILP_solution sol;
   {
     scoped_timer alt_timer{"solve capacitated model"};
@@ -515,25 +513,65 @@ paxassign::cap_ilp_assignment(
   }
 
   return cpg_id_to_comp_jrn;
-
-  /* TODO: for future evaluation
-  std::ofstream stats_file;
-  stats_file.open("motis/build/rel/ilp_files/ILP_stats.csv",
-                  std::ios_base::app);
-  stats_file << sol.stats_.num_groups_ << "," << sol.stats_.run_time_ << ","
-             << sol.stats_.num_vars_ << "," << sol.stats_.num_constraints_
-             << "," << sol.stats_.no_alt_found_ << "," << sol.stats_.obj_
-             << std::endl;
-  stats_file.close();
-   */
 }
 
 void paxassign::node_arc_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-    paxmon_data& data, schedule const& sched, std::ofstream& results_file) {
+    paxmon_data& data, schedule const& sched) {
+  std::time_t unique_key = std::time(nullptr);
+
+  std::string scenario_stats_f_name = "halle_vs_na/10_scenario_stats.csv";
+  std::string reducing_stats_f_name = "halle_vs_na/10_reducing_stats.csv";
+  std::string solution_compar_f_name = "halle_vs_na/10_solutions_comp.csv";
+  std::string loads_f_name = "halle_vs_na/10_loads.csv";
+
+  bool scenario_stats_f_existed =
+      std::filesystem::exists(scenario_stats_f_name);
+  bool reducing_stats_f_existed =
+      std::filesystem::exists(reducing_stats_f_name);
+  bool solution_compar_f_existed =
+      std::filesystem::exists(solution_compar_f_name);
+
+  std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
+  std::ofstream reducing_stats(reducing_stats_f_name, std::ios_base::app);
+  std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
+  std::ofstream loads(loads_f_name, std::ios_base::app);
+
+  // COLUMNS SCENARIO STATS
+  // ts,groups,buid_te_gr,adding_psg_te_gr,graph_red_all,na_build_ILP,
+  // na_obj,na_runtime,na_vars,na_constrs,halle_alt_search,halle_rout_reqs,halle_alts_found,
+  // halle_prepr,halle_build_ilp,halle_obj,halle_runtime,halle_vars,halle_constr
+  if (!scenario_stats_f_existed) {
+    scenario_stats
+        << "ts,groups,buid_te_gr,adding_psg_te_gr,graph_red_all,na_build_ILP,"
+           "na_obj,na_runtime,na_vars,na_constrs,halle_alt_search,halle_rout_"
+           "reqs,halle_alts_found,halle_prepr,halle_build_ilp,halle_obj,halle_"
+           "runtime,halle_vars,halle_constr\n";
+  }
+
+  // COLUMNS SCENARIO STATS
+  // ts,all_nodes,time_fil_time,time_fil_res,inch_fil_time,inch_fil_res,util_fil_time,util_fil_res
+  if (!reducing_stats_f_existed) {
+    reducing_stats << "ts,all_nodes,time_fil_time,time_fil_res,inch_fil_time,"
+                      "inch_fil_res,util_fil_time,util_fil_res\n";
+  }
+
+  // COLUMNS SOLUTION COMPARISON
+  // ts,na_exit_diff,na_inchs,halle_exit_diff,halle_inchs
+  if (!solution_compar_f_existed) {
+    solutions_compar
+        << "ts,na_exit_diff,na_inchs,halle_exit_diff,halle_inchs\n";
+  }
 
   node_arc_config na_config{1.2, 30, 6, 10000};
+
+  scenario_stats << unique_key << ",";
+  auto start = std::chrono::steady_clock::now();
   auto te_graph = build_time_expanded_graph(data, sched, na_config);
+  auto end = std::chrono::steady_clock::now();
+  auto time_building_te_graph =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
 
   std::cout << "NODES IN GRAPH : " << te_graph.nodes_.size() << std::endl;
   uint32_t edges_count = 0;
@@ -568,43 +606,103 @@ void paxassign::node_arc_ilp_assignment(
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
-  std::cout << "GROUPS AFTER CHECK: " << group_size << std::endl;
 
+  std::cout << "GROUPS AFTER CHECK: " << group_size << std::endl;
+  scenario_stats << group_size << ",";
+  scenario_stats << time_building_te_graph << ",";
+
+  start = std::chrono::steady_clock::now();
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
+  end = std::chrono::steady_clock::now();
+  auto time_adding_psgs_to_graph =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  scenario_stats << time_adding_psgs_to_graph << ",";
 
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  start = std::chrono::steady_clock::now();
   {
     logging::scoped_timer reduce_graph_timer{"reduce te graph for passengers"};
     config_graph_reduction reduction_config;
     for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-      nodes_validity[i] =
-          reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+      reducing_stats << unique_key << ",";
+      nodes_validity[i] = reduce_te_graph(
+          eg_psg_groups[i], te_graph, reduction_config, sched, reducing_stats);
     }
   }
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_halle;
-  config_graph_reduction graph_red_config{};
-
-  auto cpg_to_cj_halle =
-      cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
-                         sched, variables_with_values_halle, results_file);
+  end = std::chrono::steady_clock::now();
+  auto time_graph_reduction_all =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  scenario_stats << time_graph_reduction_all << ",";
 
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_node_arc;
   perceived_tt_config perc_tt_config;
   auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
                                na_config, perc_tt_config, sched,
-                               variables_with_values_node_arc, results_file);
+                               variables_with_values_node_arc, scenario_stats);
 
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
   std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
   // print_solution_routes_node_arc(solution, eg_psg_groups, sched, te_graph);
 
-  /*
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
+
+  // HALLE #----------------------------#
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values_halle;
+  config_graph_reduction graph_red_config{};
+  auto cpg_to_cj_halle =
+      cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
+                         sched, variables_with_values_halle, scenario_stats);
+  // END HALLE #------------------------#
+
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      solutions_compar << unique_key << ",";
+      // PLANNED
+      auto planned_exit = (*cpg.groups_.begin())
+                              ->compact_planned_journey_.legs_.back()
+                              .exit_time_;
+      // NODE-ARC
+      auto na_sol = std::find_if(
+          cpg_to_cj_node_arc.begin(), cpg_to_cj_node_arc.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (na_sol == cpg_to_cj_node_arc.end()) {
+        throw std::runtime_error("didn't find node-arc solution");
+      }
+      if (na_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto na_exit = na_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)na_exit - planned_exit << ",";
+        auto na_interchanges = na_sol->second.legs_.size() - 1;
+        solutions_compar << na_interchanges << ",";
+      }
+
+      // HALLE
+      auto halle_sol = std::find_if(
+          cpg_to_cj_halle.begin(), cpg_to_cj_halle.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (halle_sol == cpg_to_cj_halle.end()) {
+        throw std::runtime_error("didn't find halle solution");
+      }
+      if (halle_sol->second.legs_.empty()) {
+        solutions_compar << "-,-\n";
+      } else {
+        auto halle_exit = halle_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)halle_exit - planned_exit << ",";
+        auto halle_interchanges = halle_sol->second.legs_.size() - 1;
+        solutions_compar << halle_interchanges << "\n";
+      }
+    }
+  }
 
   auto halle_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_halle, te_graph, sched);
@@ -617,28 +715,44 @@ void paxassign::node_arc_ilp_assignment(
 
   auto node_arc_resulting_load = get_final_edges_load_for_solution(
       all_affected_edges, node_arc_affected_edges);
-  std::cout << "FINAL LOAD NODE ARC" << std::endl;
-  print_edges_load(node_arc_resulting_load, sched);
+  // std::cout << "FINAL LOAD NODE ARC" << std::endl;
+  // print_edges_load(node_arc_resulting_load, sched);
 
   auto halle_resulting_load = get_final_edges_load_for_solution(
       all_affected_edges, halle_affected_edges);
-  std::cout << "FINAL LOAD HALLE" << std::endl;
-  print_edges_load(halle_resulting_load, sched);
+  // std::cout << "FINAL LOAD HALLE" << std::endl;
+  // print_edges_load(halle_resulting_load, sched);
+
+  auto rel_node_arc_loads = get_relative_loads(node_arc_resulting_load);
+  loads << unique_key << ",na";
+  for (auto const l : rel_node_arc_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  auto rel_halle_loads = get_relative_loads(halle_resulting_load);
+  loads << unique_key << ",halle";
+  for (auto const l : rel_halle_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
 
   auto hist_of_halle = get_load_histogram(
       halle_resulting_load, perc_tt_config.cost_function_capacity_steps_);
   auto hist_of_node_arc = get_load_histogram(
       node_arc_resulting_load, perc_tt_config.cost_function_capacity_steps_);
-  */
+
+  scenario_stats.close();
+  reducing_stats.close();
+  solutions_compar.close();
+  loads.close();
 
   // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
   // wird
   // TODO: heuristics: aktuellen Ansatz evaluieren
   // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
-  // TODO: ggf. nur IC/ICE im Fahrplan lassen und schauen, was mit dem Graph
-  // passiert
 
-  // throw std::runtime_error("time expanded graph is built");
+  throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
