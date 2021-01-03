@@ -307,6 +307,8 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
                 });
     }
 
+    std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
+
     // model.write("motis/build/rel/ilp_files/node_arc.sol");
     // model.write("motis/build/rel/ilp_files/node_arc.lp");
     return solution;
