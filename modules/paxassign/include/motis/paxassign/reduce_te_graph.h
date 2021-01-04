@@ -28,7 +28,7 @@ inline std::ostream& operator<<(std::ostream& out,
 
 struct config_graph_reduction {
   uint16_t max_interchanges_{6};
-  uint16_t allowed_delay_{151};
+  uint16_t allowed_delay_{150};
   double max_cap_utilization_{1.2};
   std::map<service_class, transport_category> class_to_cat_{
       {service_class::AIR, transport_category::LONG_DIST},
