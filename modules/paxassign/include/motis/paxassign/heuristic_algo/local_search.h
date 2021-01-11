@@ -66,7 +66,8 @@ std::vector<std::vector<eg_edge*>> local_search(
   std::vector<std::uniform_int_distribution<>> edges_distr;
   std::uniform_int_distribution<> steps_to_go(1, max_steps);
 
-  auto curr_obj = calc_perc_tt_for_scenario(eg_psg_groups, solution, config);
+  auto curr_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, solution, config);
 
   for (auto const& sol : solution) {
     // at this point all the edges can be chosen
@@ -102,7 +103,9 @@ std::vector<std::vector<eg_edge*>> local_search(
       reassign_psgs(previous_solution, route_part_one, eg_psg_groups[gr_idx]);
       // Step 5
       solution[gr_idx] = route_part_one;
-      auto new_obj = calc_perc_tt_for_scenario(eg_psg_groups, solution, config);
+      auto new_obj = piecewise_linear_convex_perceived_tt_node_arc(
+          eg_psg_groups, solution, config);
+      std::cout << curr_obj << " vs " << new_obj << std::endl;
       if (new_obj < curr_obj) {
         curr_obj = new_obj;
       } else {

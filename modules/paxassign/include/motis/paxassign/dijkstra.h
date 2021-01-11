@@ -82,17 +82,17 @@ std::vector<eg_edge*> sssd_dijkstra(eg_event_node* from, eg_event_node* to,
       break;
     }
     for (auto const& oe : curr_node->out_edges_) {
-      if (curr_interchanges > max_interchanges) continue;
       if (!nodes_validity[oe->to_->id_]) {
         continue;
       }
       if ((oe->hard_cap_boundary_ - oe->passengers_) < psg_count) continue;
+      auto new_interchanges = (oe->type_ == eg_edge_type::TRAIN_ENTRY)
+                                  ? curr_interchanges + 1
+                                  : curr_interchanges;
+      if (new_interchanges > max_interchanges) continue;
       auto new_dist = calc_new_dist(oe.get(), curr_dist);
       if (new_dist < dist[oe->to_->id_]) {
         dist[oe->to_->id_] = new_dist;
-        auto new_interchanges = (oe->type_ == eg_edge_type::TRAIN_ENTRY)
-                                    ? curr_interchanges + 1
-                                    : curr_interchanges;
         pq.push(std::make_tuple(oe->to_, new_dist, new_interchanges));
         node_to_incoming_e[oe->to_] = oe.get();
       }
@@ -100,6 +100,8 @@ std::vector<eg_edge*> sssd_dijkstra(eg_event_node* from, eg_event_node* to,
   }
   std::vector<eg_edge*> solution;
   if (node_to_incoming_e.find(to) == node_to_incoming_e.end()) {
+    // should never happen
+    throw std::runtime_error("GREEDY DIJKSTRA, NO ROUTE FOUND");
     return solution;
   }
   eg_event_node* curr_node = to;

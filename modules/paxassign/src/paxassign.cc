@@ -162,11 +162,11 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values;
+  // std::map<std::string, std::tuple<double, double, double, double>>
+  //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
-  node_arc_ilp_assignment(combined_groups, data, sched);
-  // heuristic_assignments(combined_groups, data, sched);
+  // node_arc_ilp_assignment(combined_groups, data, sched);
+  heuristic_assignments(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -207,7 +207,7 @@ paxassign::cap_ilp_assignment(
     auto time_finding_alternatives =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
-    results_file << time_finding_alternatives << ",";
+    // results_file << time_finding_alternatives << ",";
   }
 
   auto start = std::chrono::steady_clock::now();
@@ -299,7 +299,7 @@ paxassign::cap_ilp_assignment(
 
   LOG(info) << "alternatives: " << routing_requests << " routing requests => "
             << alternatives_found << " alternatives";
-  results_file << routing_requests << "," << alternatives_found << ",";
+  // results_file << routing_requests << "," << alternatives_found << ",";
 
   std::map<std::uint16_t, combined_pg*> cpg_id_to_group;
   uint32_t curr_e_id = 1;
@@ -471,7 +471,7 @@ paxassign::cap_ilp_assignment(
   auto time_preprocessing_halle_ILP =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
-  results_file << time_preprocessing_halle_ILP << ",";
+  // results_file << time_preprocessing_halle_ILP << ",";
 
   cap_ILP_solution sol;
   {
@@ -747,17 +747,36 @@ void paxassign::node_arc_ilp_assignment(
   solutions_compar.close();
   loads.close();
 
-  // TODO: heuristics: obj funktion ändern, damit cumulative perc tt optimiert
-  // wird
-  // TODO: heuristics: aktuellen Ansatz evaluieren
-  // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
-
-  //throw std::runtime_error("time expanded graph is built");
+  // throw std::runtime_error("time expanded graph is built");
 }
 
 void paxassign::heuristic_assignments(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
+
+  int group_size = 0;
+  for (auto const& cg : combined_groups) {
+    group_size += cg.second.size();
+  }
+
+  config_graph_reduction reduction_config;
+
+  // HALLE #----------------------------#
+  std::string scenario_stats_f_name = "dummy.csv";
+  bool scenario_stats_f_existed =
+      std::filesystem::exists(scenario_stats_f_name);
+  std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
+  if (!scenario_stats_f_existed) {
+    ;
+  }
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values_halle;
+  auto cpg_to_cj_halle =
+      cap_ilp_assignment(combined_groups, data, reduction_config.allowed_delay_,
+                         sched, variables_with_values_halle, scenario_stats);
+  // END HALLE #------------------------#
+
+  std::cout << "Groups in scenario: " << group_size << std::endl;
 
   perceived_tt_config perc_tt_config;
   node_arc_config eg_config{1.2, 30, 6, 10000};
@@ -766,21 +785,19 @@ void paxassign::heuristic_assignments(
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
 
-  // for subset-scenario (only long dist stations) nodes validity has the size
-  // of 3,53 mb per psg. If during evaluation it will be too big, remove nodes
-  // validity at all and do all the stuff without it
-  config_graph_reduction reduction_config;
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-    nodes_validity[i] =
-        reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+    // !!!!!!!!! NO FILTERS to save time
+    nodes_validity[i] = std::vector<bool>(te_graph.nodes_.size(), true);
+    // reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
 
+  // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
   auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
     if (e->capacity_utilization_ >
         perc_tt_config.cost_function_capacity_steps_.back()) {
-      return (double)perc_tt_config.no_route_cost_ + curr_dist;
+      return std::numeric_limits<double>::max();
     }
     double transfer_penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
                                   ? perc_tt_config.transfer_penalty_
@@ -796,6 +813,7 @@ void paxassign::heuristic_assignments(
   };
 
   // shortest tt as in the Halle-paper
+  /*
   auto calc_tt_dist = [&](eg_edge* e, double curr_dist) {
     if (e->capacity_utilization_ >
         perc_tt_config.cost_function_capacity_steps_.back()) {
@@ -803,6 +821,13 @@ void paxassign::heuristic_assignments(
     }
     return e->cost_ + curr_dist;
   };
+  */
+
+  // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
+  // TODO: удалить пассажиров, которые не локализируются и тех, чьи альтернативы
+  // не могут быть найденны в paxmon-графе
+  // TODO: автоматизировать фильтрацию load edges, если одинаковая загрузка у
+  // обоих подходов
 
   auto rng = std::mt19937{};
 
@@ -811,31 +836,19 @@ void paxassign::heuristic_assignments(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, rng, calc_perc_tt_dist);
 
-  /*
-  for (auto const& sol : greedy_solution) {
-    std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
-  }
-  */
-  std::cout << std::fixed << "GREEDY CUMULATIVE "
-            << get_obj_after_assign(eg_psg_groups, greedy_solution,
-                                    perc_tt_config)
-            << std::endl;
-  print_solution_statistics(greedy_solution, eg_psg_groups, sched);
+  double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, greedy_solution, perc_tt_config);
+  std::cout << "manually GREEDY CUMULATIVE: " << final_obj << std::endl;
 
   {
     scoped_timer alt_timer{"LOCAL SEARCH"};
     auto ls_solution = local_search(
         eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
         nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
-    /*
-        for (auto const& sol : ls_solution) {
-          std::cout << calc_perc_tt(sol, perc_tt_config) << std::endl;
-        }
-    */
-    std::cout << std::fixed << "LS CUMULATIVE "
-              << get_obj_after_assign(eg_psg_groups, ls_solution,
-                                      perc_tt_config)
-              << std::endl;
+
+    final_obj = piecewise_linear_convex_perceived_tt_node_arc(
+        eg_psg_groups, ls_solution, perc_tt_config);
+    std::cout << "manually LS CUMULATIVE: " << final_obj << std::endl;
   }
 
   throw std::runtime_error("heuristic algorithms finished");
