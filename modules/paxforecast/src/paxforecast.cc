@@ -423,9 +423,13 @@ void paxforecast::on_monitoring_event(msg_ptr const& msg) {
     auto const scenario_unix_timestamp = sched.system_time_;
     */
 
-    if ((number_of_affected_groups >= 1 && number_of_affected_groups <= 20) &&
+    if ((number_of_affected_groups >= 1 && number_of_affected_groups <= 90) &&
         any_affected_trip_over_capacity) {
       // optimize this scenario
+      std::ofstream group_stats("groups_stat.csv", std::ios_base::app);
+      group_stats << number_of_affected_groups << ",";
+      group_stats.close();
+
       LOG(info) << "optimizing scenario";
       message_creator opt_mc;
       opt_mc.create_and_finish(

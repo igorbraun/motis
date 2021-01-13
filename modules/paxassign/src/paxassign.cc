@@ -120,6 +120,11 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
+
+  std::ofstream group_stats("groups_stat.csv", std::ios_base::app);
+  group_stats << group_size << "\n";
+  group_stats.close();
+
   /*
    for (auto& cgs : combined_groups) {
      for (auto& cpg : cgs.second) {
@@ -166,7 +171,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
   // node_arc_ilp_assignment(combined_groups, data, sched);
-  heuristic_assignments(combined_groups, data, sched);
+  // heuristic_assignments(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
