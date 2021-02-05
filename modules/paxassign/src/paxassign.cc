@@ -121,9 +121,9 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     group_size += cg.second.size();
   }
 
-  std::ofstream group_stats("groups_stat.csv", std::ios_base::app);
-  group_stats << group_size << "\n";
-  group_stats.close();
+  //std::ofstream group_stats("groups_stat_all.csv", std::ios_base::app);
+  //group_stats << group_size << "\n";
+  //group_stats.close();
 
   /*
    for (auto& cgs : combined_groups) {
@@ -166,6 +166,18 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   if (combined_groups.empty()) {
     return;
   }
+
+  int trip_count = 0;
+  for (auto const route_trips : sched.expanded_trips_) {
+    for (trip const* rt : route_trips) {
+      ++trip_count;
+    }
+  }
+  std::cout << "stations: " << sched.stations_.size() << std::endl;
+  std::cout << "nodes: " << sched.node_count_ << std::endl;
+  std::cout << "routes: " << sched.route_count_ << std::endl;
+  std::cout << "trips: " << trip_count << std::endl;
+  throw std::runtime_error("schedule statistics calculated");
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
