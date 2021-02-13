@@ -179,6 +179,74 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
   return nodes_validity;
 }
 
+void reduce_te_graph_time(eg_psg_group const& psg_group,
+                          time_expanded_graph const& te_graph,
+                          schedule const& sched,
+                          std::ofstream& reducing_stats) {
+
+  std::vector<int> delays{120, 150, 180, 210};
+  reducing_stats << te_graph.nodes_.size();
+
+  for (auto const del : delays) {
+    std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
+    auto latest_allowed_time = std::min<uint16_t>(
+        psg_group.cpg_.groups_.back()->planned_arrival_time_ + del,
+        unix_to_motistime(sched, module::get_schedule().schedule_end_));
+    // INTERCHANGE FILTER
+    {
+      logging::scoped_timer interchanges_filter{"time filter"};
+      for (auto i = 0u; i < te_graph.nodes_.size(); ++i) {
+        if (te_graph.nodes_[i]->id_ == psg_group.to_->id_ ||
+            te_graph.nodes_[i]->id_ == psg_group.from_->id_)
+          continue;
+        if (te_graph.nodes_[i]->time_ > latest_allowed_time) {
+          nodes_validity[te_graph.nodes_[i]->id_] = false;
+        }
+      }
+    }
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    reducing_stats << "," << valid_count;
+  }
+  reducing_stats << "\n";
+}
+
+void reduce_te_graph_inch(eg_psg_group const& psg_group,
+                          time_expanded_graph const& te_graph,
+                          schedule const& sched,
+                          std::ofstream& reducing_stats) {
+
+  std::vector<uint16_t> inches{3, 4, 5, 6};
+  reducing_stats << te_graph.nodes_.size();
+
+  for (auto const inch : inches) {
+    std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
+    auto calc_dist_interchanges = [](eg_edge* e, auto curr_dist) {
+      return (e->type_ == eg_edge_type::TRAIN_ENTRY) ? curr_dist + 1
+                                                     : curr_dist;
+    };
+    {
+      logging::scoped_timer interchanges_filter{"inch filter"};
+      auto forward_inch_filter_res =
+          dijkstra<uint16_t>(dijkstra_type::FORWARD, psg_group.from_, 0,
+                             std::numeric_limits<uint16_t>::max(), te_graph,
+                             nodes_validity, calc_dist_interchanges);
+      filter_nodes<uint16_t>(nodes_validity, forward_inch_filter_res, inch);
+      auto backward_inch_filter_res =
+          dijkstra<uint16_t>(dijkstra_type::BACKWARD, psg_group.to_, 0,
+                             std::numeric_limits<uint16_t>::max(), te_graph,
+                             nodes_validity, calc_dist_interchanges);
+      filter_nodes<uint16_t>(nodes_validity, backward_inch_filter_res, inch);
+    }
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+
+    reducing_stats << "," << valid_count;
+  }
+
+  reducing_stats << "\n";
+}
+
 std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
                                   time_expanded_graph const& te_graph,
                                   config_graph_reduction const& config,

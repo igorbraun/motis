@@ -121,9 +121,9 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     group_size += cg.second.size();
   }
 
-  //std::ofstream group_stats("groups_stat_all.csv", std::ios_base::app);
-  //group_stats << group_size << "\n";
-  //group_stats.close();
+  // std::ofstream group_stats("groups_stat_all.csv", std::ios_base::app);
+  // group_stats << group_size << "\n";
+  // group_stats.close();
 
   /*
    for (auto& cgs : combined_groups) {
@@ -167,17 +167,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  int trip_count = 0;
-  for (auto const route_trips : sched.expanded_trips_) {
-    for (trip const* rt : route_trips) {
-      ++trip_count;
-    }
-  }
-  std::cout << "stations: " << sched.stations_.size() << std::endl;
-  std::cout << "nodes: " << sched.node_count_ << std::endl;
-  std::cout << "routes: " << sched.route_count_ << std::endl;
-  std::cout << "trips: " << trip_count << std::endl;
-  throw std::runtime_error("schedule statistics calculated");
+  filter_evaluation(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
@@ -530,6 +520,81 @@ paxassign::cap_ilp_assignment(
   }
 
   return cpg_id_to_comp_jrn;
+}
+
+void paxassign::filter_evaluation(
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  auto te_graph = build_time_expanded_graph(data, sched, na_config);
+
+  std::cout << "NODES IN GRAPH : " << te_graph.nodes_.size() << std::endl;
+  uint32_t edges_count = 0;
+  for (auto const& n : te_graph.nodes_) {
+    edges_count += n->out_edges_.size();
+  }
+  std::cout << "EDGES IN GRAPH : " << edges_count << std::endl;
+
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      if (!cgs.second[cpg_ind].localization_.in_trip()) {
+        ++cpg_ind;
+        continue;
+      }
+      auto tr_data = te_graph.trip_data_.find(
+          to_extern_trip(sched, cgs.second[cpg_ind].localization_.in_trip_));
+      if (tr_data == te_graph.trip_data_.end()) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
+
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
+
+  std::string reducing_stats_f_name_time = "reducing_eval_time.csv";
+  std::string reducing_stats_f_name_inch = "reducing_eval_inch.csv";
+
+  bool reducing_stats_f_existed_time =
+      std::filesystem::exists(reducing_stats_f_name_time);
+  bool reducing_stats_f_existed_inch =
+      std::filesystem::exists(reducing_stats_f_name_inch);
+
+  std::ofstream reducing_stats_time(reducing_stats_f_name_time,
+                                    std::ios_base::app);
+  std::ofstream reducing_stats_inch(reducing_stats_f_name_inch,
+                                    std::ios_base::app);
+
+  if (!reducing_stats_f_existed_time) {
+    reducing_stats_time << "all_nodes,120,150,180,210\n";
+  }
+  if (!reducing_stats_f_existed_inch) {
+    reducing_stats_inch << "all_nodes,3,4,5,6\n";
+  }
+
+  {
+    logging::scoped_timer reduce_graph_timer{"reduce te graph for passengers"};
+
+    // config_graph_reduction reduction_config;
+
+    for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+      reduce_te_graph_time(eg_psg_groups[i], te_graph, sched,
+                           reducing_stats_time);
+      reduce_te_graph_inch(eg_psg_groups[i], te_graph, sched,
+                           reducing_stats_inch);
+
+      // nodes_validity[i] = reduce_te_graph(
+      //    eg_psg_groups[i], te_graph, reduction_config, sched,
+      //    reducing_stats);
+    }
+  }
+
+  reducing_stats_time.close();
+  reducing_stats_inch.close();
 }
 
 void paxassign::node_arc_ilp_assignment(

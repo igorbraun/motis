@@ -424,7 +424,7 @@ void paxforecast::on_monitoring_event(msg_ptr const& msg) {
     */
 
     //  && number_of_affected_groups <= 90
-    if ((number_of_affected_groups >= 1) &&
+    if ((number_of_affected_groups >= 40) && (number_of_affected_groups <= 60) &&
         any_affected_trip_over_capacity) {
       // optimize this scenario
       //std::ofstream group_stats("groups_stat_all.csv", std::ios_base::app);
