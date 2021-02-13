@@ -556,6 +556,7 @@ void paxassign::filter_evaluation(
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
 
+  /*
   std::string reducing_stats_f_name_time = "reducing_eval_time.csv";
   std::string reducing_stats_f_name_inch = "reducing_eval_inch.csv";
 
@@ -595,6 +596,34 @@ void paxassign::filter_evaluation(
 
   reducing_stats_time.close();
   reducing_stats_inch.close();
+
+  */
+
+  std::string reducing_stats_f_name_combinations =
+      "reducing_eval_combinations.csv";
+  bool reducing_stats_f_existed_combinations =
+      std::filesystem::exists(reducing_stats_f_name_combinations);
+  std::ofstream reducing_stats_combinations(reducing_stats_f_name_combinations,
+                                            std::ios_base::app);
+  if (!reducing_stats_f_existed_combinations) {
+    reducing_stats_combinations << "delay,inch,result\n";
+  }
+
+  std::vector<int> delays{120, 150, 180, 210};
+  std::vector<uint16_t> inches{3, 4, 5, 6};
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    for (auto const del : delays) {
+      for (auto const inch : inches) {
+        config_graph_reduction config;
+        config.allowed_delay_ = del;
+        config.max_interchanges_ = inch;
+        reducing_stats_combinations << del << "," << inch << ",";
+        reduce_te_graph(eg_psg_groups[i], te_graph, config, sched,
+                        reducing_stats_combinations);
+      }
+    }
+  }
+  reducing_stats_combinations.close();
 }
 
 void paxassign::node_arc_ilp_assignment(
