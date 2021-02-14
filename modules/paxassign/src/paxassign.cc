@@ -166,8 +166,10 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   if (combined_groups.empty()) {
     return;
   }
-  count_scenarios(combined_groups, data, sched);
-  //filter_evaluation(combined_groups, data, sched);
+
+  // count_scenarios(combined_groups, data, sched);
+  // filter_evaluation(combined_groups, data, sched);
+  filter_and_opt_evaluation(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
@@ -522,13 +524,152 @@ paxassign::cap_ilp_assignment(
   return cpg_id_to_comp_jrn;
 }
 
-void paxassign::count_scenarios(
-    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
-    paxmon_data& data, schedule const& sched){
-  std::ofstream count_scenarios("Count_scenarios.txt",
-                                    std::ios_base::app);
+void paxassign::count_scenarios(std::map<unsigned, std::vector<combined_pg>>&,
+                                paxmon_data&, schedule const&) {
+  std::ofstream count_scenarios("Count_scenarios.txt", std::ios_base::app);
   count_scenarios << "1" << std::endl;
   count_scenarios.close();
+}
+
+void paxassign::filter_and_opt_evaluation(
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+  std::time_t unique_key = std::time(nullptr);
+
+  std::string scenario_stats_f_name = "filter_eval_scenario_stats.csv";
+  bool scenario_stats_f_existed =
+      std::filesystem::exists(scenario_stats_f_name);
+  std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
+  if (!scenario_stats_f_existed) {
+    scenario_stats << "ts,conf_delay,conf_inches,obj\n";
+  }
+
+  std::string solution_compar_f_name = "filter_eval_solutions_comp.csv";
+  bool solution_compar_f_existed =
+      std::filesystem::exists(solution_compar_f_name);
+  std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
+  if (!solution_compar_f_existed) {
+    solutions_compar << "ts,conf_delay,conf_inches,delay,inches\n";
+  }
+
+  std::string loads_f_name = "loads.csv";
+  std::ofstream loads(loads_f_name, std::ios_base::app);
+
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  auto te_graph = build_time_expanded_graph(data, sched, na_config);
+
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      if (!cgs.second[cpg_ind].localization_.in_trip()) {
+        ++cpg_ind;
+        continue;
+      }
+      auto tr_data = te_graph.trip_data_.find(
+          to_extern_trip(sched, cgs.second[cpg_ind].localization_.in_trip_));
+      if (tr_data == te_graph.trip_data_.end()) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
+
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
+
+  std::vector<std::pair<int, int>> del_inch_conf{
+      {120, 3}, {150, 4}, {180, 5}, {210, 6}};
+
+  std::vector<
+      std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>>
+      all_solutions_cj(4);
+
+  int config_index = 0;
+  for (auto const& curr_conf : del_inch_conf) {
+    scenario_stats << unique_key << "," << curr_conf.first << ","
+                   << curr_conf.second << ",";
+    std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+
+    config_graph_reduction config;
+    config.allowed_delay_ = curr_conf.first;
+    config.max_interchanges_ = curr_conf.second;
+    for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+      nodes_validity[i] =
+          reduce_te_graph(eg_psg_groups[i], te_graph, config, sched);
+    }
+
+    std::map<std::string, std::tuple<double, double, double, double>>
+        variables_with_values_node_arc;
+    perceived_tt_config perc_tt_config;
+    auto solution = node_arc_ilp(
+        eg_psg_groups, nodes_validity, te_graph, na_config, perc_tt_config,
+        sched, variables_with_values_node_arc, scenario_stats);
+
+    double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
+        eg_psg_groups, solution, perc_tt_config);
+    std::cout << "manually NODE-ARC ILP CUMULATIVE: " << final_obj << std::endl;
+
+    all_solutions_cj[config_index] =
+        node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
+
+    for (auto& cgs : combined_groups) {
+      for (auto& cpg : cgs.second) {
+        solutions_compar << unique_key << "," << curr_conf.first << ","
+                         << curr_conf.second << ",";
+        // PLANNED
+        auto planned_exit = (*cpg.groups_.begin())
+                                ->compact_planned_journey_.legs_.back()
+                                .exit_time_;
+        // NODE-ARC
+        auto na_sol = std::find_if(
+            all_solutions_cj[config_index].begin(),
+            all_solutions_cj[config_index].end(),
+            [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                    p) { return p.first.id_ == cpg.id_; });
+        if (na_sol == all_solutions_cj[config_index].end()) {
+          throw std::runtime_error("didn't find node-arc solution");
+        }
+        if (na_sol->second.legs_.empty()) {
+          solutions_compar << "-,-,";
+        } else {
+          auto na_exit = na_sol->second.legs_.back().exit_time_;
+          solutions_compar << (int)na_exit - planned_exit << ",";
+          auto na_interchanges = na_sol->second.legs_.size() - 1;
+          solutions_compar << na_interchanges << "\n";
+        }
+      }
+    }
+    ++config_index;
+  }
+
+  std::set<eg_edge*> all_affected_edges;
+  std::vector<std::map<eg_edge*, uint32_t>> affected_edges_per_solution(4);
+
+  for (auto config_i = 0u; config_i < del_inch_conf.size(); ++config_i) {
+    affected_edges_per_solution[config_i] = get_edges_load_from_solutions(
+        all_solutions_cj[config_i], te_graph, sched);
+    add_affected_edges_from_sol(affected_edges_per_solution[config_i],
+                                all_affected_edges);
+  }
+
+  for (auto config_i = 0u; config_i < del_inch_conf.size(); ++config_i) {
+    auto curr_resulting_load = get_final_edges_load_for_solution(
+        all_affected_edges, affected_edges_per_solution[config_i]);
+    auto rel_node_arc_loads = get_relative_loads(curr_resulting_load);
+    loads << unique_key << "," << del_inch_conf[config_i].first << ","
+          << del_inch_conf[config_i].second;
+    for (auto const l : rel_node_arc_loads) {
+      loads << "," << l;
+    }
+    loads << "\n";
+  }
+
+  scenario_stats.close();
+  solutions_compar.close();
+  loads.close();
+
+  throw std::runtime_error("check this out");
 }
 
 void paxassign::filter_evaluation(

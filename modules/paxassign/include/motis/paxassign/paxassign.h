@@ -47,6 +47,9 @@ private:
   void count_scenarios(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched);
+  void filter_and_opt_evaluation(
+      std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+      paxmon_data& data, schedule const& sched);
   void toy_scenario(const motis::module::msg_ptr&);
 };
 
