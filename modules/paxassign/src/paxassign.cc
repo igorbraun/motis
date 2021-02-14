@@ -166,8 +166,8 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   if (combined_groups.empty()) {
     return;
   }
-
-  filter_evaluation(combined_groups, data, sched);
+  count_scenarios(combined_groups, data, sched);
+  //filter_evaluation(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
@@ -520,6 +520,15 @@ paxassign::cap_ilp_assignment(
   }
 
   return cpg_id_to_comp_jrn;
+}
+
+void paxassign::count_scenarios(
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+    paxmon_data& data, schedule const& sched){
+  std::ofstream count_scenarios("Count_scenarios.txt",
+                                    std::ios_base::app);
+  count_scenarios << "1" << std::endl;
+  count_scenarios.close();
 }
 
 void paxassign::filter_evaluation(
