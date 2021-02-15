@@ -541,7 +541,8 @@ void paxassign::filter_and_opt_evaluation(
       std::filesystem::exists(scenario_stats_f_name);
   std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
   if (!scenario_stats_f_existed) {
-    scenario_stats << "ts,conf_delay,conf_inches,obj\n";
+    scenario_stats << "ts,conf_delay,conf_inches,filter_time,build_ILP_time,"
+                      "ILP_solving_time,obj\n";
   }
 
   std::string solution_compar_f_name = "filter_eval_solutions_comp.csv";
@@ -594,10 +595,17 @@ void paxassign::filter_and_opt_evaluation(
     config_graph_reduction config;
     config.allowed_delay_ = curr_conf.first;
     config.max_interchanges_ = curr_conf.second;
+
+    auto start = std::chrono::steady_clock::now();
     for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
       nodes_validity[i] =
           reduce_te_graph(eg_psg_groups[i], te_graph, config, sched);
     }
+    auto end = std::chrono::steady_clock::now();
+    auto time_graph_reduction_all =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    scenario_stats << time_graph_reduction_all << ",";
 
     std::map<std::string, std::tuple<double, double, double, double>>
         variables_with_values_node_arc;
