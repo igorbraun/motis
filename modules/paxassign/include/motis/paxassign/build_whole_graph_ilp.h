@@ -315,6 +315,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     }
 
     std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
+    std::cout << "NUMVARS: " << model.get(GRB_IntAttr_NumVars) << std::endl;
 
     results_file << model.get(GRB_DoubleAttr_Runtime) << ","
                  << model.get(GRB_DoubleAttr_ObjVal) << "\n";

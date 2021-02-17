@@ -50,6 +50,9 @@ private:
   void filter_and_opt_evaluation(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched);
+  void find_suspicious_groups(
+      std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+      paxmon_data& data, schedule const& sched);
   void toy_scenario(const motis::module::msg_ptr&);
 };
 

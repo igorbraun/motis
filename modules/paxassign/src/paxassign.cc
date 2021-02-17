@@ -167,9 +167,11 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  count_scenarios(combined_groups, data, sched);
+  // count_scenarios(combined_groups, data, sched);
   // filter_evaluation(combined_groups, data, sched);
   // filter_and_opt_evaluation(combined_groups, data, sched);
+
+  find_suspicious_groups(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
@@ -782,6 +784,67 @@ void paxassign::filter_evaluation(
     }
   }
   reducing_stats_combinations.close();
+}
+
+void paxassign::find_suspicious_groups(
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  auto te_graph = build_time_expanded_graph(data, sched, na_config);
+
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      if (!cgs.second[cpg_ind].localization_.in_trip()) {
+        ++cpg_ind;
+        continue;
+      }
+      auto tr_data = te_graph.trip_data_.find(
+          to_extern_trip(sched, cgs.second[cpg_ind].localization_.in_trip_));
+      if (tr_data == te_graph.trip_data_.end()) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
+  int group_size = 0;
+  for (auto const& cg : combined_groups) {
+    group_size += cg.second.size();
+  }
+  if (group_size != 30 && group_size != 31) {
+    return;
+  }
+
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
+
+  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  {
+    logging::scoped_timer reduce_graph_timer{"reduce te graph for passengers"};
+    config_graph_reduction reduction_config;
+    for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+      std::cout << "FROM "
+                << sched.stations_[eg_psg_groups[i].from_->station_]->name_
+                << " AT " << format_time(eg_psg_groups[i].from_->time_)
+                << " TO "
+                << sched.stations_[eg_psg_groups[i].to_->station_]->name_
+                << " AT " << format_time(eg_psg_groups[i].to_->time_)
+                << std::endl;
+      nodes_validity[i] =
+          reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+    }
+  }
+
+  std::ofstream scenario_stats("dummy_scenario_stats.csv", std::ios_base::app);
+
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values_node_arc;
+  perceived_tt_config perc_tt_config;
+  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
+                               na_config, perc_tt_config, sched,
+                               variables_with_values_node_arc, scenario_stats);
 }
 
 void paxassign::node_arc_ilp_assignment(
