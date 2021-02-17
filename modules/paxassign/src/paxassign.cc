@@ -167,9 +167,9 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
-  // count_scenarios(combined_groups, data, sched);
+  count_scenarios(combined_groups, data, sched);
   // filter_evaluation(combined_groups, data, sched);
-  filter_and_opt_evaluation(combined_groups, data, sched);
+  // filter_and_opt_evaluation(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
@@ -639,7 +639,7 @@ void paxassign::filter_and_opt_evaluation(
           throw std::runtime_error("didn't find node-arc solution");
         }
         if (na_sol->second.legs_.empty()) {
-          solutions_compar << "-,-,";
+          solutions_compar << "-,-\n";
         } else {
           auto na_exit = na_sol->second.legs_.back().exit_time_;
           solutions_compar << (int)na_exit - planned_exit << ",";
