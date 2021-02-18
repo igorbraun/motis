@@ -834,6 +834,12 @@ void paxassign::find_suspicious_groups(
                 << format_time(
                        eg_psg_groups[i].cpg_.groups_[0]->planned_arrival_time_)
                 << std::endl;
+      std::cout << "legs enter/exit: " << std::endl;
+      for (auto const& l :
+           eg_psg_groups[i].cpg_.groups_[0]->compact_planned_journey_.legs_) {
+        std::cout << "enter time: " << format_time(l.enter_time_)
+                  << " exit time: " << format_time(l.exit_time_) << std::endl;
+      }
       nodes_validity[i] =
           reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
     }
