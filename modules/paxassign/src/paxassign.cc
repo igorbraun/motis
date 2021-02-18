@@ -830,7 +830,9 @@ void paxassign::find_suspicious_groups(
                 << " AT " << format_time(eg_psg_groups[i].from_->time_)
                 << " TO "
                 << sched.stations_[eg_psg_groups[i].to_->station_]->name_
-                << " AT " << format_time(eg_psg_groups[i].to_->time_)
+                << " AT "
+                << format_time(
+                       eg_psg_groups[i].cpg_.groups_[0]->planned_arrival_time_)
                 << std::endl;
       nodes_validity[i] =
           reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
