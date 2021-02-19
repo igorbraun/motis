@@ -1098,6 +1098,7 @@ void paxassign::heuristic_assignments(
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
+  std::cout << "Groups in scenario: " << group_size << std::endl;
 
   config_graph_reduction reduction_config;
 
@@ -1108,6 +1109,7 @@ void paxassign::heuristic_assignments(
   std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
   if (!scenario_stats_f_existed) {
     ;
+    // TODO
   }
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
@@ -1116,7 +1118,6 @@ void paxassign::heuristic_assignments(
                          sched, variables_with_values_halle, scenario_stats);
   // END HALLE #------------------------#
 
-  std::cout << "Groups in scenario: " << group_size << std::endl;
 
   perceived_tt_config perc_tt_config;
   node_arc_config eg_config{1.2, 30, 6, 10000};
@@ -1152,33 +1153,21 @@ void paxassign::heuristic_assignments(
            transfer_penalty + curr_dist;
   };
 
-  // shortest tt as in the Halle-paper
-  /*
-  auto calc_tt_dist = [&](eg_edge* e, double curr_dist) {
-    if (e->capacity_utilization_ >
-        perc_tt_config.cost_function_capacity_steps_.back()) {
-      return (double)perc_tt_config.no_route_cost_ + curr_dist;
-    }
-    return e->cost_ + curr_dist;
-  };
-  */
-
-  // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
-  // TODO: удалить пассажиров, которые не локализируются и тех, чьи альтернативы
-  // не могут быть найденны в paxmon-графе
-  // TODO: автоматизировать фильтрацию load edges, если одинаковая загрузка у
-  // обоих подходов
-
   auto rng = std::mt19937{};
 
   // Start solution for local search. calc_perc_tt_dist is used
   auto greedy_solution = greedy_assignment(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, rng, calc_perc_tt_dist);
-
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, greedy_solution, perc_tt_config);
   std::cout << "manually GREEDY CUMULATIVE: " << final_obj << std::endl;
+
+  // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
+  // TODO: удалить пассажиров, которые не локализируются и тех, чьи альтернативы
+  // не могут быть найденны в paxmon-графе
+  // TODO: автоматизировать фильтрацию load edges, если одинаковая загрузка у
+  // обоих подходов
 
   {
     scoped_timer alt_timer{"LOCAL SEARCH"};
@@ -1191,7 +1180,7 @@ void paxassign::heuristic_assignments(
     std::cout << "manually LS CUMULATIVE: " << final_obj << std::endl;
   }
 
-  throw std::runtime_error("heuristic algorithms finished");
+  //throw std::runtime_error("heuristic algorithms finished");
 }
 
 }  // namespace motis::paxassign
