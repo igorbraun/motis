@@ -27,6 +27,10 @@ std::vector<std::vector<eg_edge*>> greedy_assignment(
           eg_psg_groups[psgs_indices[i]].psg_count_, 0.0,
           std::numeric_limits<double>::max(), te_graph,
           nodes_validity[psgs_indices[i]], max_interchanges, obj_f);
+      if (solution[psgs_indices[i]].empty()) {
+        throw std::runtime_error(
+            "GREEDY ASSIGNMENT, DIJKSTRA DIDN'T FIND ANY ROUTE");
+      }
       add_psgs_to_edges(solution[psgs_indices[i]],
                         eg_psg_groups[psgs_indices[i]]);
     }

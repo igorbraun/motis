@@ -100,8 +100,6 @@ std::vector<eg_edge*> sssd_dijkstra(eg_event_node* from, eg_event_node* to,
   }
   std::vector<eg_edge*> solution;
   if (node_to_incoming_e.find(to) == node_to_incoming_e.end()) {
-    // should never happen
-    throw std::runtime_error("GREEDY DIJKSTRA, NO ROUTE FOUND");
     return solution;
   }
   eg_event_node* curr_node = to;

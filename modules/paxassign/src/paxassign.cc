@@ -171,13 +171,13 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   // filter_evaluation(combined_groups, data, sched);
   // filter_and_opt_evaluation(combined_groups, data, sched);
 
-  find_suspicious_groups(combined_groups, data, sched);
+  //find_suspicious_groups(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
   // node_arc_ilp_assignment(combined_groups, data, sched);
-  // heuristic_assignments(combined_groups, data, sched);
+  heuristic_assignments(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
