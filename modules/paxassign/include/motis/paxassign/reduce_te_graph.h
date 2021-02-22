@@ -91,6 +91,7 @@ std::vector<bool> time_filter(eg_psg_group const& psg_group,
     std::cout << "result after time filter: " << valid_count << " / "
               << te_graph.nodes_.size() << std::endl;
   }
+  return nodes_validity;
 }
 
 std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
