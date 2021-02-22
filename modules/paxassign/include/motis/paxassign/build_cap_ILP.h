@@ -257,6 +257,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
         alt_to_use};
     std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
 
+    results_file << model.get(GRB_DoubleAttr_ObjVal) << ",";
     /*
     results_file << model.get(GRB_DoubleAttr_ObjVal) << ","
                  << model.get(GRB_DoubleAttr_Runtime) << ","

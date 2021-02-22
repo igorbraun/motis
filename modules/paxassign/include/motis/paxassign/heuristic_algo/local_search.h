@@ -98,7 +98,13 @@ std::vector<std::vector<eg_edge*>> local_search(
       }
       route_part_one.insert(route_part_one.end(), route_part_two.begin(),
                             route_part_two.end());
-      // TODO: check for cumulative interchanges, max driving time and co
+
+      auto const num_interchanges = std::count_if(
+          route_part_one.begin(), route_part_one.end(),
+          [](eg_edge* e) { return e->type_ == eg_edge_type::TRAIN_ENTRY; });
+      if (num_interchanges > max_interchanges) {
+        continue;
+      }
 
       // Step 5
       auto previous_solution{solution[gr_idx]};
@@ -115,7 +121,7 @@ std::vector<std::vector<eg_edge*>> local_search(
       }
       remove_psgs_from_edges(route_part_one, eg_psg_groups[gr_idx]);
 
-      std::cout << curr_obj << " vs " << new_obj << std::endl;
+      //std::cout << curr_obj << " vs " << new_obj << std::endl;
       if (new_obj < curr_obj) {
         curr_obj = new_obj;
         curr_psg_distr =

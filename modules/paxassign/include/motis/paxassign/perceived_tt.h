@@ -232,9 +232,11 @@ double piecewise_linear_convex_perceived_tt_node_arc(
     }
   }
 
+  /*
   std::cout << std::fixed << "CUM NO ROUTE: " << cum_no_route << std::endl;
   std::cout << std::fixed << "CUM TRIPS AND WAITS: " << cum_trips_waits
             << std::endl;
+  */
 
   return result;
 }

@@ -171,7 +171,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   // filter_evaluation(combined_groups, data, sched);
   // filter_and_opt_evaluation(combined_groups, data, sched);
 
-  //find_suspicious_groups(combined_groups, data, sched);
+  // find_suspicious_groups(combined_groups, data, sched);
 
   // std::map<std::string, std::tuple<double, double, double, double>>
   //    variables_with_values;
@@ -1103,13 +1103,12 @@ void paxassign::heuristic_assignments(
   config_graph_reduction reduction_config;
 
   // HALLE #----------------------------#
-  std::string scenario_stats_f_name = "dummy.csv";
+  std::string scenario_stats_f_name = "heuristics_temp_stats.csv";
   bool scenario_stats_f_existed =
       std::filesystem::exists(scenario_stats_f_name);
   std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
   if (!scenario_stats_f_existed) {
-    ;
-    // TODO
+    scenario_stats << "AP_obj,greedy_obj,ls_obj\n";
   }
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
@@ -1117,7 +1116,6 @@ void paxassign::heuristic_assignments(
       cap_ilp_assignment(combined_groups, data, reduction_config.allowed_delay_,
                          sched, variables_with_values_halle, scenario_stats);
   // END HALLE #------------------------#
-
 
   perceived_tt_config perc_tt_config;
   node_arc_config eg_config{1.2, 30, 6, 10000};
@@ -1162,12 +1160,12 @@ void paxassign::heuristic_assignments(
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, greedy_solution, perc_tt_config);
   std::cout << "manually GREEDY CUMULATIVE: " << final_obj << std::endl;
+  scenario_stats << final_obj << ",";
 
   // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
   // TODO: удалить пассажиров, которые не локализируются и тех, чьи альтернативы
   // не могут быть найденны в paxmon-графе
-  // TODO: автоматизировать фильтрацию load edges, если одинаковая загрузка у
-  // обоих подходов
+  // TODO: check for max driving time? Greedy & LS
 
   {
     scoped_timer alt_timer{"LOCAL SEARCH"};
@@ -1178,6 +1176,7 @@ void paxassign::heuristic_assignments(
     final_obj = piecewise_linear_convex_perceived_tt_node_arc(
         eg_psg_groups, ls_solution, perc_tt_config);
     std::cout << "manually LS CUMULATIVE: " << final_obj << std::endl;
+    scenario_stats << final_obj << "\n";
   }
 
   //throw std::runtime_error("heuristic algorithms finished");
