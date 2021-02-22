@@ -1126,9 +1126,8 @@ void paxassign::heuristic_assignments(
 
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-    // !!!!!!!!! NO FILTERS to save time
-    nodes_validity[i] = std::vector<bool>(te_graph.nodes_.size(), true);
-    // reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+    nodes_validity[i] =
+        time_filter(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
