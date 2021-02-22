@@ -1093,6 +1093,25 @@ void paxassign::node_arc_ilp_assignment(
 void paxassign::heuristic_assignments(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, schedule const& sched) {
+  node_arc_config eg_config{1.2, 30, 6, 10000};
+  auto te_graph = build_time_expanded_graph(data, sched, eg_config);
+
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      if (!cgs.second[cpg_ind].localization_.in_trip()) {
+        ++cpg_ind;
+        continue;
+      }
+      auto tr_data = te_graph.trip_data_.find(
+          to_extern_trip(sched, cgs.second[cpg_ind].localization_.in_trip_));
+      if (tr_data == te_graph.trip_data_.end()) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
 
   int group_size = 0;
   for (auto const& cg : combined_groups) {
@@ -1117,13 +1136,8 @@ void paxassign::heuristic_assignments(
                          sched, variables_with_values_halle, scenario_stats);
   // END HALLE #------------------------#
 
-  perceived_tt_config perc_tt_config;
-  node_arc_config eg_config{1.2, 30, 6, 10000};
-
-  auto te_graph = build_time_expanded_graph(data, sched, eg_config);
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
-
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     nodes_validity[i] =
@@ -1132,6 +1146,7 @@ void paxassign::heuristic_assignments(
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
+  perceived_tt_config perc_tt_config;
   auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
     if (e->capacity_utilization_ >
         perc_tt_config.cost_function_capacity_steps_.back()) {
@@ -1166,6 +1181,13 @@ void paxassign::heuristic_assignments(
   // не могут быть найденны в paxmon-графе
   // TODO: check for max driving time? Greedy & LS
 
+  /*
+  {
+    scoped_timer alt_timer{"FIND PROBLEMATIC GROUPS"};
+    find_problematic_groups(eg_psg_groups, greedy_solution, perc_tt_config,
+                            te_graph, nodes_validity);
+  }*/
+
   {
     scoped_timer alt_timer{"LOCAL SEARCH"};
     auto ls_solution = local_search(
@@ -1178,7 +1200,7 @@ void paxassign::heuristic_assignments(
     scenario_stats << final_obj << "\n";
   }
 
-  //throw std::runtime_error("heuristic algorithms finished");
+  // throw std::runtime_error("heuristic algorithms finished");
 }
 
 }  // namespace motis::paxassign

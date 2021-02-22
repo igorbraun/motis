@@ -27,6 +27,73 @@ std::set<eg_event_node*> BFS(eg_edge* previous_edge, uint8_t const max_depth) {
   return result;
 }
 
+struct arc_load_stat {
+  std::map<eg_edge*, std::set<int>> arc_to_psgs_idx;
+  std::vector<std::pair<eg_edge*, double>> arc_to_util;
+};
+
+arc_load_stat e_to_util_and_groups(
+    std::vector<eg_psg_group> const& psg_groups,
+    std::vector<std::vector<eg_edge*>> const& solution) {
+  arc_load_stat arcs_stat;
+
+  std::map<eg_edge*, double> assgmts;
+  for (auto i = 0u; i < solution.size(); ++i) {
+    for (auto const& e : solution[i]) {
+      if (assgmts.find(e) == assgmts.end()) {
+        assgmts[e] = psg_groups[i].psg_count_;
+      } else {
+        assgmts[e] += psg_groups[i].psg_count_;
+      }
+      arcs_stat.arc_to_psgs_idx[e].insert(i);
+    }
+  }
+
+  for (auto const& map_entry : assgmts) {
+    double new_util =
+        (double)(map_entry.first->passengers_ + map_entry.second) /
+        map_entry.first->soft_cap_boundary_;
+    arcs_stat.arc_to_util.push_back({map_entry.first, new_util});
+  }
+
+  std::sort(std::begin(arcs_stat.arc_to_util), std::end(arcs_stat.arc_to_util),
+            [](std::pair<eg_edge*, double>& left,
+               std::pair<eg_edge*, double>& right) {
+              return left.second > right.second;
+            });
+
+  return arcs_stat;
+}
+
+void find_problematic_groups(
+    std::vector<eg_psg_group> const& eg_psg_groups,
+    std::vector<std::vector<eg_edge*>> const& start_solution,
+    perceived_tt_config const& config, time_expanded_graph const& te_graph,
+    std::vector<std::vector<bool>> const& nodes_validity) {
+  std::cout << "Find problematic groups start" << std::endl;
+
+  auto curr_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, start_solution, config);
+
+  std::vector<std::vector<eg_edge*>> solution{start_solution};
+
+  // 1. uses arc with highest utilization
+  auto load_stats = e_to_util_and_groups(eg_psg_groups, start_solution);
+
+  int max_arcs_to_test = 1;
+  for (auto const& p : load_stats.arc_to_util) {
+    ++max_arcs_to_test;
+    std::cout << "Max load edge: " << p.second << " for groups: " << std::endl;
+    for (auto const val : load_stats.arc_to_psgs_idx.at(p.first)) {
+      std::cout << val << std::endl;
+    }
+    if (max_arcs_to_test > 10) break;
+  }
+
+  // 2. has highest delay (assign with greedy but change the order wrt highest
+  // delay)
+}
+
 template <typename F>
 std::vector<std::vector<eg_edge*>> local_search(
     std::vector<eg_psg_group> const& eg_psg_groups,
@@ -121,7 +188,7 @@ std::vector<std::vector<eg_edge*>> local_search(
       }
       remove_psgs_from_edges(route_part_one, eg_psg_groups[gr_idx]);
 
-      //std::cout << curr_obj << " vs " << new_obj << std::endl;
+      // std::cout << curr_obj << " vs " << new_obj << std::endl;
       if (new_obj < curr_obj) {
         curr_obj = new_obj;
         curr_psg_distr =
