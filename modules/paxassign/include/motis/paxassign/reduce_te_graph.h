@@ -65,6 +65,34 @@ void filter_nodes(std::vector<bool>& nodes_validity, std::vector<T> const& dist,
   }
 }
 
+std::vector<bool> time_filter(eg_psg_group const& psg_group,
+                              time_expanded_graph const& te_graph,
+                              config_graph_reduction const& config,
+                              schedule const& sched) {
+  std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
+  // TIME FILTER
+  {
+    auto latest_allowed_time = std::min<uint16_t>(
+        psg_group.cpg_.groups_.back()->planned_arrival_time_ +
+            config.allowed_delay_,
+        unix_to_motistime(sched, module::get_schedule().schedule_end_));
+
+    for (auto i = 0u; i < te_graph.nodes_.size(); ++i) {
+      if (te_graph.nodes_[i]->id_ == psg_group.to_->id_ ||
+          te_graph.nodes_[i]->id_ == psg_group.from_->id_)
+        continue;
+      if (te_graph.nodes_[i]->time_ > latest_allowed_time) {
+        nodes_validity[te_graph.nodes_[i]->id_] = false;
+      }
+    }
+
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    std::cout << "result after time filter: " << valid_count << " / "
+              << te_graph.nodes_.size() << std::endl;
+  }
+}
+
 std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
                                   time_expanded_graph const& te_graph,
                                   config_graph_reduction const& config,
@@ -254,7 +282,7 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
                                   std::ofstream& reducing_stats) {
   std::vector<bool> nodes_validity(te_graph.nodes_.size(), true);
 
-  //reducing_stats << te_graph.nodes_.size() << ",";
+  // reducing_stats << te_graph.nodes_.size() << ",";
   // TIME FILTER
   {
     auto start = std::chrono::steady_clock::now();
@@ -275,10 +303,10 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
     auto time_time_filter =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
-    //reducing_stats << time_time_filter << ",";
+    // reducing_stats << time_time_filter << ",";
     auto valid_count =
         std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
-    //reducing_stats << valid_count << ",";
+    // reducing_stats << valid_count << ",";
   }
 
   // INTERCHANGE FILTER
@@ -306,10 +334,10 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
     auto time_interchange_filter =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
-    //reducing_stats << time_interchange_filter << ",";
+    // reducing_stats << time_interchange_filter << ",";
     auto valid_count =
         std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
-    //reducing_stats << valid_count << ",";
+    // reducing_stats << valid_count << ",";
   }
 
   // CAPACITY UTILIZATION FILTER
@@ -335,7 +363,7 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
     auto time_utilization_filter =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
-    //reducing_stats << time_utilization_filter << ",";
+    // reducing_stats << time_utilization_filter << ",";
     auto valid_count =
         std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
     reducing_stats << valid_count << "\n";
