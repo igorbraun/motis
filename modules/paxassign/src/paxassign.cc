@@ -1181,13 +1181,13 @@ void paxassign::heuristic_assignments(
   // не могут быть найденны в paxmon-графе
   // TODO: check for max driving time? Greedy & LS
 
-  /*
   {
     scoped_timer alt_timer{"FIND PROBLEMATIC GROUPS"};
     find_problematic_groups(eg_psg_groups, greedy_solution, perc_tt_config,
                             te_graph, nodes_validity);
-  }*/
+  }
 
+  /*
   {
     scoped_timer alt_timer{"LOCAL SEARCH"};
     auto ls_solution = local_search(
@@ -1199,8 +1199,9 @@ void paxassign::heuristic_assignments(
     std::cout << "manually LS CUMULATIVE: " << final_obj << std::endl;
     scenario_stats << final_obj << "\n";
   }
+  */
 
-  // throw std::runtime_error("heuristic algorithms finished");
+  throw std::runtime_error("heuristic algorithms finished");
 }
 
 }  // namespace motis::paxassign

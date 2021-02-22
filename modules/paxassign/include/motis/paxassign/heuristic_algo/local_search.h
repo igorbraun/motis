@@ -72,14 +72,8 @@ void find_problematic_groups(
     std::vector<std::vector<bool>> const& nodes_validity) {
   std::cout << "Find problematic groups start" << std::endl;
 
-  auto curr_obj = piecewise_linear_convex_perceived_tt_node_arc(
-      eg_psg_groups, start_solution, config);
-
-  std::vector<std::vector<eg_edge*>> solution{start_solution};
-
   // 1. uses arc with highest utilization
   auto load_stats = e_to_util_and_groups(eg_psg_groups, start_solution);
-
   int max_arcs_to_test = 1;
   for (auto const& p : load_stats.arc_to_util) {
     ++max_arcs_to_test;
@@ -90,8 +84,35 @@ void find_problematic_groups(
     if (max_arcs_to_test > 10) break;
   }
 
-  // 2. has highest delay (assign with greedy but change the order wrt highest
-  // delay)
+  // 2. passengers with no-route
+  std::vector<int> no_route_ids;
+  for (auto i = 0u; i < start_solution.size(); ++i) {
+    auto no_route_edge = std::find_if(
+        start_solution[i].begin(), start_solution[i].end(),
+        [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
+    if (no_route_edge != start_solution[i].end()) {
+      no_route_ids.push_back(i);
+    }
+  }
+
+  // 3. has highest delays
+  std::vector<std::pair<int, int>> delay_to_id;
+  for (auto i = 0u; i < start_solution.size(); ++i) {
+    auto no_route_edge = std::find_if(
+        start_solution[i].begin(), start_solution[i].end(),
+        [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
+    if (no_route_edge != start_solution[i].end()) {
+      continue;
+    }
+    delay_to_id.push_back(
+        {start_solution[i].back()->from_->time_ -
+             eg_psg_groups[i].cpg_.groups_[0]->planned_arrival_time_,
+         i});
+  }
+  std::sort(std::begin(delay_to_id), std::end(delay_to_id),
+            [](std::pair<int, int>& left, std::pair<int, int>& right) {
+              return left.first > right.first;
+            });
 }
 
 template <typename F>
@@ -108,20 +129,20 @@ std::vector<std::vector<eg_edge*>> local_search(
   // 2. In C randomly choose a station X (besides the last station and maybe
   // some stations before)
   // 3. Go a couple of edges (parameter) from X in an arbitrary direction. You
-  // will result in a station Z (in the current implementation all nodes within
-  // a certain depth will be checked)
+  // will result in a station Z (in the current implementation all nodes
+  // within a certain depth will be checked)
   // 4. Do two shortest path searches with perceived_tt as objective. Route 1:
   // current station -> Z. Route 2: Z -> end station.
-  // 5. Check the objective function of the complete scenario. Better? Take the
-  // new connection into the current solution. Otherwise, throw it away
+  // 5. Check the objective function of the complete scenario. Better? Take
+  // the new connection into the current solution. Otherwise, throw it away
   // 6. Goto 1 until the termination criterion is not reached
 
   // Possible improvements:
-  // 1. Consider the capacity utilization of edges by choosing the group in 1 or
-  // the station in 2
+  // 1. Consider the capacity utilization of edges by choosing the group in 1
+  // or the station in 2
   // 2. In step 3 go not only in the future, but also in the past
-  // 3. In step 2 do it not only with 1 station X, select 2 random stations and
-  // do 3 dijkstra's
+  // 3. In step 2 do it not only with 1 station X, select 2 random stations
+  // and do 3 dijkstra's
 
   auto curr_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, start_solution, config);
