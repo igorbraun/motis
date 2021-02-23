@@ -167,6 +167,20 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
     return;
   }
 
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      time loc_time = cgs.second[cpg_ind].localization_.current_arrival_time_;
+      time planner_arr_time =
+          cgs.second[cpg_ind].groups_[0]->planned_arrival_time_;
+      if (planner_arr_time > loc_time + 1440) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
+
   // count_scenarios(combined_groups, data, sched);
   // filter_evaluation(combined_groups, data, sched);
   // filter_and_opt_evaluation(combined_groups, data, sched);
