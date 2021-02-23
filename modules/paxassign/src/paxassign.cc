@@ -1127,7 +1127,7 @@ void paxassign::heuristic_assignments(
       std::filesystem::exists(scenario_stats_f_name);
   std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
   if (!scenario_stats_f_existed) {
-    scenario_stats << "AP_obj,greedy_obj,ls_obj\n";
+    scenario_stats << "AP_obj,NA_obj,greedy_obj\n";
   }
   std::map<std::string, std::tuple<double, double, double, double>>
       variables_with_values_halle;
@@ -1141,12 +1141,21 @@ void paxassign::heuristic_assignments(
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     nodes_validity[i] =
-        time_filter(eg_psg_groups[i], te_graph, reduction_config, sched);
+        reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
+
+  // NODE-ARC
+  perceived_tt_config perc_tt_config;
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  std::map<std::string, std::tuple<double, double, double, double>>
+      variables_with_values_node_arc;
+  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
+                               na_config, perc_tt_config, sched,
+                               variables_with_values_node_arc, scenario_stats);
+  // END NODE-ARC
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
-  perceived_tt_config perc_tt_config;
   auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
     if (e->capacity_utilization_ >
         perc_tt_config.cost_function_capacity_steps_.back()) {
@@ -1174,7 +1183,7 @@ void paxassign::heuristic_assignments(
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, greedy_solution, perc_tt_config);
   std::cout << "manually GREEDY CUMULATIVE: " << final_obj << std::endl;
-  scenario_stats << final_obj << ",";
+  scenario_stats << final_obj << "\n";
 
   // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
   // TODO: удалить пассажиров, которые не локализируются и тех, чьи альтернативы
@@ -1201,7 +1210,7 @@ void paxassign::heuristic_assignments(
   }
   */
 
-  throw std::runtime_error("heuristic algorithms finished");
+  // throw std::runtime_error("heuristic algorithms finished");
 }
 
 }  // namespace motis::paxassign
