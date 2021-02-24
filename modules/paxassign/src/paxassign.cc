@@ -183,7 +183,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
 
   // count_scenarios(combined_groups, data, sched);
   // filter_evaluation(combined_groups, data, sched);
-  // filter_and_opt_evaluation(combined_groups, data, sched);
+  filter_and_opt_evaluation(combined_groups, data, sched);
 
   // find_suspicious_groups(combined_groups, data, sched);
 
@@ -191,7 +191,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
   // node_arc_ilp_assignment(combined_groups, data, sched);
-  heuristic_assignments(combined_groups, data, sched);
+  // heuristic_assignments(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -569,6 +569,13 @@ void paxassign::filter_and_opt_evaluation(
     solutions_compar << "ts,conf_delay,conf_inches,delay,inches\n";
   }
 
+  std::string no_alts = "no_alts_210_6.csv";
+  bool no_alts_existed = std::filesystem::exists(no_alts);
+  std::ofstream no_alts_file(no_alts, std::ios_base::app);
+  if (!no_alts_existed) {
+    no_alts_file << "delay,inches\n";
+  }
+
   std::string loads_f_name = "loads.csv";
   std::ofstream loads(loads_f_name, std::ios_base::app);
 
@@ -596,7 +603,9 @@ void paxassign::filter_and_opt_evaluation(
       add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
 
   std::vector<std::pair<int, int>> del_inch_conf{
-      {120, 3}, {150, 4}, {180, 5}, {210, 6}};
+      {210, 6}
+      //    {120, 3}, {150, 4}, {180, 5}, {210, 6}
+  };
 
   std::vector<
       std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>>
@@ -656,6 +665,20 @@ void paxassign::filter_and_opt_evaluation(
         }
         if (na_sol->second.legs_.empty()) {
           solutions_compar << "-,-\n";
+
+          // CHECK REASON OF NO ROUTES WITH ROUTING
+          if (curr_conf.first == 210) {
+            auto alternatives = motis::paxforecast::find_alternatives(
+                sched, cpg.destination_station_id_, cpg.localization_);
+            if (alternatives.empty()) {
+              no_alts_file << "-,-\n";
+            }
+            for (auto const& a : alternatives) {
+              no_alts_file << a.arrival_time_ -
+                                  cpg.groups_[0]->planned_arrival_time_
+                           << "," << a.transfers_ << "\n";
+            }
+          }
         } else {
           auto na_exit = na_sol->second.legs_.back().exit_time_;
           solutions_compar << (int)na_exit - planned_exit << ",";
@@ -692,8 +715,7 @@ void paxassign::filter_and_opt_evaluation(
   scenario_stats.close();
   solutions_compar.close();
   loads.close();
-
-  throw std::runtime_error("check this out");
+  no_alts_file.close();
 }
 
 void paxassign::filter_evaluation(
