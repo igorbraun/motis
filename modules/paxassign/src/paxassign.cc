@@ -183,7 +183,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
 
   // count_scenarios(combined_groups, data, sched);
   // filter_evaluation(combined_groups, data, sched);
-  filter_and_opt_evaluation(combined_groups, data, sched);
+  // filter_and_opt_evaluation(combined_groups, data, sched);
 
   // find_suspicious_groups(combined_groups, data, sched);
 
@@ -191,7 +191,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
   // node_arc_ilp_assignment(combined_groups, data, sched);
-  // heuristic_assignments(combined_groups, data, sched);
+  heuristic_assignments(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -1180,15 +1180,17 @@ void paxassign::heuristic_assignments(
         reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
 
-  // NODE-ARC
   perceived_tt_config perc_tt_config;
-  node_arc_config na_config{1.2, 30, 6, 10000};
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_node_arc;
-  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
-                               na_config, perc_tt_config, sched,
-                               variables_with_values_node_arc, scenario_stats);
-  // END NODE-ARC
+  /*
+// NODE-ARC
+node_arc_config na_config{1.2, 30, 6, 10000};
+std::map<std::string, std::tuple<double, double, double, double>>
+    variables_with_values_node_arc;
+auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
+                             na_config, perc_tt_config, sched,
+                             variables_with_values_node_arc, scenario_stats);
+// END NODE-ARC
+ */
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
@@ -1216,20 +1218,35 @@ void paxassign::heuristic_assignments(
   auto greedy_solution = greedy_assignment(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, rng, calc_perc_tt_dist);
-  double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
+  double greedy_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, greedy_solution, perc_tt_config);
-  std::cout << "manually GREEDY CUMULATIVE: " << final_obj << std::endl;
-  scenario_stats << final_obj << "\n";
+  std::cout << "manually GREEDY CUMULATIVE: " << greedy_obj << std::endl;
+  scenario_stats << greedy_obj << "\n";
 
-  // TODO: heuristics: akt. Ans. verbessern. Konzentration auf Problemstellen
-  // TODO: удалить пассажиров, которые не локализируются и тех, чьи альтернативы
-  // не могут быть найденны в paxmon-графе
-  // TODO: check for max driving time? Greedy & LS
+  // TODO: удалить пассажиров, чьи альтернативы не могут быть найденны в
+  // paxmon-графе
 
   {
     scoped_timer alt_timer{"FIND PROBLEMATIC GROUPS"};
-    find_problematic_groups(eg_psg_groups, greedy_solution, perc_tt_config,
-                            te_graph, nodes_validity);
+    std::vector<int> load_based_order;
+    std::vector<int> delay_based_order;
+    find_problematic_groups(eg_psg_groups, greedy_solution, load_based_order,
+                            delay_based_order);
+    auto load_order_solution = greedy_assignment_spec_order(
+        te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+        eg_psg_groups, load_based_order, calc_perc_tt_dist);
+    double load_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
+        eg_psg_groups, load_order_solution, perc_tt_config);
+    std::cout << "load_order_obj GREEDY CUMULATIVE: " << load_order_obj
+              << std::endl;
+
+    auto delay_order_solution = greedy_assignment_spec_order(
+        te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+        eg_psg_groups, delay_based_order, calc_perc_tt_dist);
+    double delay_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
+        eg_psg_groups, delay_order_solution, perc_tt_config);
+    std::cout << "delay_order_obj GREEDY CUMULATIVE: " << delay_order_obj
+              << std::endl;
   }
 
   /*
@@ -1246,7 +1263,7 @@ void paxassign::heuristic_assignments(
   }
   */
 
-  // throw std::runtime_error("heuristic algorithms finished");
+  throw std::runtime_error("heuristic algorithms finished");
 }
 
 }  // namespace motis::paxassign

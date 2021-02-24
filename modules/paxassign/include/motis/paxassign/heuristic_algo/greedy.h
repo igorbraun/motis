@@ -41,4 +41,34 @@ std::vector<std::vector<eg_edge*>> greedy_assignment(
   }
   return solution;
 }
+
+template <typename F>
+std::vector<std::vector<eg_edge*>> greedy_assignment_spec_order(
+    time_expanded_graph const& te_graph,
+    std::vector<std::vector<bool>> const& nodes_validity,
+    int const max_interchanges, std::vector<eg_psg_group> const& eg_psg_groups,
+    std::vector<int> const& order, F obj_f) {
+  std::vector<std::vector<eg_edge*>> solution(eg_psg_groups.size());
+
+  for (auto i = 0u; i < order.size(); ++i) {
+    {
+      logging::scoped_timer greedy{"greedy algorithm specific order"};
+      solution[order[i]] = sssd_dijkstra<double>(
+          eg_psg_groups[order[i]].from_, eg_psg_groups[order[i]].to_,
+          eg_psg_groups[order[i]].psg_count_, 0.0,
+          std::numeric_limits<double>::max(), te_graph,
+          nodes_validity[order[i]], max_interchanges, obj_f);
+      if (solution[order[i]].empty()) {
+        throw std::runtime_error(
+            "GREEDY ASSIGNMENT (SPEC ORDER), DIJKSTRA DIDN'T FIND ANY ROUTE");
+      }
+      add_psgs_to_edges(solution[order[i]], eg_psg_groups[order[i]]);
+    }
+  }
+
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    remove_psgs_from_edges(solution[i], eg_psg_groups[i]);
+  }
+  return solution;
+}
 }  // namespace motis::paxassign

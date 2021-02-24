@@ -65,47 +65,51 @@ arc_load_stat e_to_util_and_groups(
   return arcs_stat;
 }
 
-void find_problematic_groups(
+std::vector<int> sort_by_max_load(
     std::vector<eg_psg_group> const& eg_psg_groups,
-    std::vector<std::vector<eg_edge*>> const& start_solution,
-    perceived_tt_config const& config, time_expanded_graph const& te_graph,
-    std::vector<std::vector<bool>> const& nodes_validity) {
-  std::cout << "Find problematic groups start" << std::endl;
-
-  // 1. uses arc with highest utilization
-  auto load_stats = e_to_util_and_groups(eg_psg_groups, start_solution);
-  int max_arcs_to_test = 1;
+    std::vector<std::vector<eg_edge*>> const& solution) {
+  // 1. use arc with highest utilization
+  std::vector<int> result;
+  auto load_stats = e_to_util_and_groups(eg_psg_groups, solution);
   for (auto const& p : load_stats.arc_to_util) {
-    ++max_arcs_to_test;
-    std::cout << "Max load edge: " << p.second << " for groups: " << std::endl;
-    for (auto const val : load_stats.arc_to_psgs_idx.at(p.first)) {
-      std::cout << val << std::endl;
+    for (auto const gr_id : load_stats.arc_to_psgs_idx.at(p.first)) {
+      if (std::find(result.begin(), result.end(), gr_id) == result.end()) {
+        result.push_back(gr_id);
+      }
     }
-    if (max_arcs_to_test > 10) break;
   }
+  return result;
+}
 
+std::vector<int> no_routes_pgs(
+    std::vector<std::vector<eg_edge*>> const& solution) {
   // 2. passengers with no-route
   std::vector<int> no_route_ids;
-  for (auto i = 0u; i < start_solution.size(); ++i) {
+  for (auto i = 0u; i < solution.size(); ++i) {
     auto no_route_edge = std::find_if(
-        start_solution[i].begin(), start_solution[i].end(),
+        solution[i].begin(), solution[i].end(),
         [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
-    if (no_route_edge != start_solution[i].end()) {
+    if (no_route_edge != solution[i].end()) {
       no_route_ids.push_back(i);
     }
   }
+  return no_route_ids;
+}
 
+std::vector<int> sorted_by_delays(
+    std::vector<eg_psg_group> const& eg_psg_groups,
+    std::vector<std::vector<eg_edge*>> const& solution) {
   // 3. has highest delays
   std::vector<std::pair<int, int>> delay_to_id;
-  for (auto i = 0u; i < start_solution.size(); ++i) {
+  for (auto i = 0u; i < solution.size(); ++i) {
     auto no_route_edge = std::find_if(
-        start_solution[i].begin(), start_solution[i].end(),
+        solution[i].begin(), solution[i].end(),
         [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
-    if (no_route_edge != start_solution[i].end()) {
+    if (no_route_edge != solution[i].end()) {
       continue;
     }
     delay_to_id.push_back(
-        {start_solution[i].back()->from_->time_ -
+        {solution[i].back()->from_->time_ -
              eg_psg_groups[i].cpg_.groups_[0]->planned_arrival_time_,
          i});
   }
@@ -113,6 +117,45 @@ void find_problematic_groups(
             [](std::pair<int, int>& left, std::pair<int, int>& right) {
               return left.first > right.first;
             });
+  return utl::to_vec(delay_to_id,
+                     [&](std::pair<int, int> const& p) { return p.second; });
+}
+
+void find_problematic_groups(
+    std::vector<eg_psg_group> const& eg_psg_groups,
+    std::vector<std::vector<eg_edge*>> const& start_solution,
+    std::vector<int>& load_based_order, std::vector<int>& delay_based_order) {
+  auto load_descending = sort_by_max_load(eg_psg_groups, start_solution);
+  auto no_route_pgs = no_routes_pgs(start_solution);
+  auto delay_descending = sorted_by_delays(eg_psg_groups, start_solution);
+
+  // CASE I: loads based
+  load_based_order.insert(load_based_order.end(), no_route_pgs.begin(),
+                          no_route_pgs.end());
+  for (auto const gr_id : load_descending) {
+    if (std::find(load_based_order.begin(), load_based_order.end(), gr_id) ==
+        load_based_order.end()) {
+      load_based_order.push_back(gr_id);
+    }
+  }
+  if (load_based_order.size() != eg_psg_groups.size()) {
+    throw std::runtime_error(
+        "load based order: size of vec not equal to number of groups");
+  }
+
+  // CASE 2: delay based
+  delay_based_order.insert(delay_based_order.end(), no_route_pgs.begin(),
+                           no_route_pgs.end());
+  for (auto const gr_id : delay_descending) {
+    if (std::find(delay_based_order.begin(), delay_based_order.end(), gr_id) ==
+        delay_based_order.end()) {
+      delay_based_order.push_back(gr_id);
+    }
+  }
+  if (delay_based_order.size() != eg_psg_groups.size()) {
+    throw std::runtime_error(
+        "delay based order: size of vec not equal to number of groups");
+  }
 }
 
 template <typename F>
