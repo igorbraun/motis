@@ -37,7 +37,6 @@
 #include "motis/paxassign/service_functions.h"
 #include "motis/paxassign/service_time_exp_graph.h"
 #include "motis/paxassign/solution_to_compact_journey.h"
-#include "motis/paxassign/time_expanded_graph.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
 #include "../../../build/rel/generated/motis/protocol/Message_generated.h"
@@ -198,7 +197,8 @@ std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
 paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, uint16_t const allowed_delay, schedule const& sched,
-    double& obj_value, std::ofstream& results_file) {
+    time_expanded_graph const& te_graph, double& obj_value,
+    std::ofstream& results_file) {
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
     psgs_in_sc += cgs.second.size();
@@ -262,6 +262,17 @@ paxassign::cap_ilp_assignment(
                    cpg.groups_.back()->planned_arrival_time_ >
                allowed_delay)) {
             remove_alt = true;
+          }
+          if (!remove_alt) {
+            // CHECK IF TRIPS FROM HALLE ARE IN TE-GRAPH
+            for (auto const& l :
+                 cpg.alternatives_[curr_alt_ind].compact_journey_.legs_) {
+              auto tr_data =
+                  te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
+              if (tr_data == te_graph.trip_data_.end()) {
+                remove_alt = true;
+              }
+            }
           }
           if (!remove_alt) {
             for (auto const [leg_idx, leg] : utl::enumerate(
@@ -1028,7 +1039,7 @@ void paxassign::node_arc_ilp_assignment(
   double halle_obj;
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
-                         sched, halle_obj, scenario_stats);
+                         sched, te_graph, halle_obj, scenario_stats);
   // END HALLE #------------------------#
 
   for (auto& cgs : combined_groups) {
@@ -1160,13 +1171,12 @@ void paxassign::heuristic_assignments(
     scenario_stats
         << "gr_size,AP_obj,NA_obj,greedy_obj,load_based,delay_based\n";
   }
-
   scenario_stats << group_size << ",";
 
   double halle_gurobi_obj;
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, reduction_config.allowed_delay_,
-                         sched, halle_gurobi_obj, scenario_stats);
+                         sched, te_graph, halle_gurobi_obj, scenario_stats);
   // END HALLE #------------------------#
 
   auto eg_psg_groups =
@@ -1189,22 +1199,6 @@ void paxassign::heuristic_assignments(
 
   std::cout << "arc-path: " << halle_gurobi_obj
             << " vs node-arc: " << na_gurobi_obj << std::endl;
-  if (halle_gurobi_obj < na_gurobi_obj) {
-    // CHECK IF TRIPS FROM HALLE ARE IN TE-GRAPH
-    for (auto const& pg_to_cj : cpg_to_cj_halle) {
-      // is trip contained in te graph?
-      for (auto const& l : pg_to_cj.second.legs_) {
-        auto tr_data = te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
-        if (tr_data == te_graph.trip_data_.end()) {
-          std::cout << "Trip not in expanded graph" << std::endl;
-        } else {
-          std::cout << "Trip found" << std::endl;
-        }
-      }
-    }
-    scenario_stats.close();
-    throw std::runtime_error("trip from halle not in te-graph");
-  }
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
@@ -1238,7 +1232,7 @@ void paxassign::heuristic_assignments(
   scenario_stats << greedy_obj << ",";
 
   // TODO: удалить пассажиров, чьи альтернативы не могут быть найденны в
-  // paxmon-графе
+  // te-графе
 
   {
     scoped_timer alt_timer{"FIND PROBLEMATIC GROUPS"};

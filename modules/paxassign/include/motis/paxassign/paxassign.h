@@ -8,6 +8,7 @@
 
 #include "motis/module/module.h"
 #include "motis/paxassign/combined_pg.h"
+#include "motis/paxassign/time_expanded_graph.h"
 #include "motis/paxmon/paxmon_data.h"
 
 using namespace motis::paxmon;
@@ -32,7 +33,8 @@ private:
   cap_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, uint16_t const allowed_delay, schedule const& sched,
-      double& obj_value, std::ofstream& results_file);
+      time_expanded_graph const& te_graph, double& obj_value,
+      std::ofstream& results_file);
   void node_arc_ilp_assignment(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched);
