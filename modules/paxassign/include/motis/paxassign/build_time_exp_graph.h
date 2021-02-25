@@ -337,9 +337,7 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                  n->time_ < cpg.localization_.current_arrival_time_;
         }) |
         utl::vec();
-    if (relevant_nodes.empty()) {
-      return psg_localization_node;
-    } else {
+    if (!relevant_nodes.empty()) {
       std::sort(std::begin(relevant_nodes), std::end(relevant_nodes),
                 [](eg_event_node const* lhs, eg_event_node const* rhs) {
                   return lhs->time_ < rhs->time_;
@@ -347,8 +345,33 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
       te_graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
           psg_localization_node, relevant_nodes[0], eg_edge_type::WAIT_STATION,
           relevant_nodes[0]->time_ - psg_localization_node->time_)));
-      return psg_localization_node;
     }
+
+    // FOOT EDGES WITHING CLUSTER
+    for (auto const& out_fe :
+         sched.stations_[cpg.localization_.at_station_->index_]
+             ->outgoing_footpaths_) {
+      std::vector<eg_event_node*> rel_wait_nodes_at_to_st =
+          utl::all(te_graph.st_to_nodes_[out_fe.to_station_]) |
+          utl::remove_if([&](auto const& n) {
+            return n->type_ != eg_event_type::WAIT ||
+                   n->time_ <= psg_localization_node->time_ + out_fe.duration_;
+          }) |
+          utl::vec();
+      if (!rel_wait_nodes_at_to_st.empty()) {
+        std::sort(std::begin(rel_wait_nodes_at_to_st),
+                  std::end(rel_wait_nodes_at_to_st),
+                  [](eg_event_node const* lhs, eg_event_node const* rhs) {
+                    return lhs->time_ < rhs->time_;
+                  });
+        te_graph.not_trip_edges_.emplace_back(add_edge(make_not_in_trip_edge(
+            psg_localization_node, rel_wait_nodes_at_to_st[0],
+            eg_edge_type::WAIT_STATION,
+            rel_wait_nodes_at_to_st[0]->time_ - psg_localization_node->time_)));
+      }
+    }
+
+    return psg_localization_node;
   }
 }
 
@@ -382,6 +405,18 @@ std::vector<eg_psg_group> add_psgs_to_te_graph(
                 n.get(), target_node, eg_edge_type::FINISH, 0, te_graph);
           }
         }
+        // FINISH FROM CLUSTER ARRS TO TARGET
+        for (auto const& in_fe :
+             sched.stations_[target_node->station_]->incoming_footpaths_) {
+          for (auto& from_node : te_graph.st_to_nodes_[in_fe.from_station_]) {
+            if (from_node->type_ == eg_event_type::ARR) {
+              motis::paxassign::add_not_in_trip_edge(from_node, target_node,
+                                                     eg_edge_type::FINISH,
+                                                     in_fe.duration_, te_graph);
+            }
+          }
+        }
+
         motis::paxassign::add_not_in_trip_edge(at_ev_node, target_node,
                                                eg_edge_type::NO_ROUTE,
                                                config.no_route_cost_, te_graph);
