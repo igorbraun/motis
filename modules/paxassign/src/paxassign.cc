@@ -1201,8 +1201,6 @@ void paxassign::heuristic_assignments(
     scenario_stats.close();
     throw std::runtime_error("trip from halle not in te-graph");
   }
-  scenario_stats.close();
-  return;
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
@@ -1260,7 +1258,7 @@ void paxassign::heuristic_assignments(
         eg_psg_groups, delay_order_solution, perc_tt_config);
     std::cout << "delay_order_obj GREEDY CUMULATIVE: " << delay_order_obj
               << std::endl;
-    scenario_stats << load_order_obj << "\n";
+    scenario_stats << delay_order_obj << "\n";
   }
 
   /*
