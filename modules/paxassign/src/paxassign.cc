@@ -1157,8 +1157,12 @@ void paxassign::heuristic_assignments(
       std::filesystem::exists(scenario_stats_f_name);
   std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
   if (!scenario_stats_f_existed) {
-    scenario_stats << "AP_obj,NA_obj,greedy_obj,load_based,delay_based\n";
+    scenario_stats
+        << "gr_size,AP_obj,NA_obj,greedy_obj,load_based,delay_based\n";
   }
+
+  scenario_stats << group_size << ",";
+
   double halle_gurobi_obj;
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, reduction_config.allowed_delay_,
