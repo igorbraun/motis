@@ -77,8 +77,7 @@ std::map<cap_ILP_edge*, double> calculate_assignments_to_edges_halle(
 double piecewise_linear_convex_perceived_tt_halle(
     std::vector<cap_ILP_psg_group> const& cap_ILP_scenario,
     std::vector<std::pair<ilp_psg_id, alt_idx>> const& assignment,
-    perceived_tt_config const& perc_tt_config,
-    std::map<std::string, std::tuple<double, double, double, double>> const&) {
+    perceived_tt_config const& perc_tt_config) {
   double result = 0;
 
   double cum_no_route = 0;

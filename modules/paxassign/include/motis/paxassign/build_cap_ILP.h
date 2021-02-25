@@ -13,9 +13,7 @@ namespace motis::paxassign {
 
 cap_ILP_solution build_ILP_from_scenario_API(
     std::vector<cap_ILP_psg_group> const& passengers,
-    perceived_tt_config const& config, std::string const&,
-    std::map<std::string, std::tuple<double, double, double, double>>&
-        variables_with_values,
+    perceived_tt_config const& config, std::string const&, double& obj_val,
     std::ofstream& results_file) {
   try {
     auto start = std::chrono::steady_clock::now();
@@ -227,27 +225,6 @@ cap_ILP_solution build_ILP_from_scenario_API(
       }
     }
 
-    for (auto const& arv : alt_route_vars) {
-      for (auto const& curr_arv : arv) {
-        variables_with_values[curr_arv.get(GRB_StringAttr_VarName)] =
-            std::make_tuple(curr_arv.get(GRB_DoubleAttr_X),
-                            curr_arv.get(GRB_DoubleAttr_Obj),
-                            curr_arv.get(GRB_DoubleAttr_X) *
-                                curr_arv.get(GRB_DoubleAttr_Obj),
-                            curr_arv.get(GRB_DoubleAttr_UB));
-      }
-    }
-    for (auto const& ecv : edge_cost_vars) {
-      for (auto const& curr_ecv : ecv.second) {
-        variables_with_values[curr_ecv.get(GRB_StringAttr_VarName)] =
-            std::make_tuple(curr_ecv.get(GRB_DoubleAttr_X),
-                            curr_ecv.get(GRB_DoubleAttr_Obj),
-                            curr_ecv.get(GRB_DoubleAttr_X) *
-                                curr_ecv.get(GRB_DoubleAttr_Obj),
-                            curr_ecv.get(GRB_DoubleAttr_UB));
-      }
-    }
-
     cap_ILP_solution solution{
         cap_ILP_stats{passengers.size(), no_alt, model.get(GRB_IntAttr_NumVars),
                       model.get(GRB_IntAttr_NumGenConstrs) +
@@ -266,6 +243,7 @@ cap_ILP_solution build_ILP_from_scenario_API(
                         model.get(GRB_IntAttr_NumConstrs)
                  << "\n";
     */
+    obj_val = model.get(GRB_DoubleAttr_ObjVal);
     return solution;
 
   } catch (GRBException e) {

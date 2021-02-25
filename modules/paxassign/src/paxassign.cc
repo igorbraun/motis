@@ -198,9 +198,7 @@ std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
 paxassign::cap_ilp_assignment(
     std::map<unsigned, std::vector<combined_pg>>& combined_groups,
     paxmon_data& data, uint16_t const allowed_delay, schedule const& sched,
-    std::map<std::string, std::tuple<double, double, double, double>>&
-        variables_with_values,
-    std::ofstream& results_file) {
+    double& obj_value, std::ofstream& results_file) {
   uint16_t psgs_in_sc = 0;
   for (auto& cgs : combined_groups) {
     psgs_in_sc += cgs.second.size();
@@ -506,11 +504,11 @@ paxassign::cap_ilp_assignment(
     sol = build_ILP_from_scenario_API(cap_ILP_scenario, perc_tt_config,
                                       std::to_string(cap_ILP_scenario.size()) +
                                           "_" + std::to_string(random_variable),
-                                      variables_with_values, results_file);
+                                      obj_value, results_file);
   }
 
   auto final_obj = piecewise_linear_convex_perceived_tt_halle(
-      cap_ILP_scenario, sol.alt_to_use_, perc_tt_config, variables_with_values);
+      cap_ILP_scenario, sol.alt_to_use_, perc_tt_config);
   std::cout << "manually calculated perc_tt of halle ILP : " << final_obj
             << std::endl;
 
@@ -632,12 +630,11 @@ void paxassign::filter_and_opt_evaluation(
             .count();
     scenario_stats << time_graph_reduction_all << ",";
 
-    std::map<std::string, std::tuple<double, double, double, double>>
-        variables_with_values_node_arc;
+    double na_gurobi_obj;
     perceived_tt_config perc_tt_config;
-    auto solution = node_arc_ilp(
-        eg_psg_groups, nodes_validity, te_graph, na_config, perc_tt_config,
-        sched, variables_with_values_node_arc, scenario_stats);
+    auto solution =
+        node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
+                     perc_tt_config, sched, na_gurobi_obj, scenario_stats);
 
     double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
         eg_psg_groups, solution, perc_tt_config);
@@ -883,12 +880,11 @@ void paxassign::find_suspicious_groups(
 
   std::ofstream scenario_stats("dummy_scenario_stats.csv", std::ios_base::app);
 
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_node_arc;
+  double na_gurobi_ojb;
   perceived_tt_config perc_tt_config;
-  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
-                               na_config, perc_tt_config, sched,
-                               variables_with_values_node_arc, scenario_stats);
+  auto solution =
+      node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
+                   perc_tt_config, sched, na_gurobi_ojb, scenario_stats);
 }
 
 void paxassign::node_arc_ilp_assignment(
@@ -1013,12 +1009,11 @@ void paxassign::node_arc_ilp_assignment(
           .count();
   scenario_stats << time_graph_reduction_all << ",";
 
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_node_arc;
+  double na_gurobi_obj;
   perceived_tt_config perc_tt_config;
-  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
-                               na_config, perc_tt_config, sched,
-                               variables_with_values_node_arc, scenario_stats);
+  auto solution =
+      node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
+                   perc_tt_config, sched, na_gurobi_obj, scenario_stats);
 
   double final_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, solution, perc_tt_config);
@@ -1029,12 +1024,11 @@ void paxassign::node_arc_ilp_assignment(
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
 
   // HALLE #----------------------------#
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_halle;
   config_graph_reduction graph_red_config{};
+  double halle_obj;
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, graph_red_config.allowed_delay_,
-                         sched, variables_with_values_halle, scenario_stats);
+                         sched, halle_obj, scenario_stats);
   // END HALLE #------------------------#
 
   for (auto& cgs : combined_groups) {
@@ -1165,11 +1159,10 @@ void paxassign::heuristic_assignments(
   if (!scenario_stats_f_existed) {
     scenario_stats << "AP_obj,NA_obj,greedy_obj,load_based,delay_based\n";
   }
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_halle;
+  double halle_gurobi_obj;
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, reduction_config.allowed_delay_,
-                         sched, variables_with_values_halle, scenario_stats);
+                         sched, halle_gurobi_obj, scenario_stats);
   // END HALLE #------------------------#
 
   auto eg_psg_groups =
@@ -1184,12 +1177,32 @@ void paxassign::heuristic_assignments(
 
   // NODE-ARC
   node_arc_config na_config{1.2, 30, 6, 10000};
-  std::map<std::string, std::tuple<double, double, double, double>>
-      variables_with_values_node_arc;
-  auto solution = node_arc_ilp(eg_psg_groups, nodes_validity, te_graph,
-                               na_config, perc_tt_config, sched,
-                               variables_with_values_node_arc, scenario_stats);
+  double na_gurobi_obj;
+  auto solution =
+      node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
+                   perc_tt_config, sched, na_gurobi_obj, scenario_stats);
   // END NODE-ARC
+
+  std::cout << "arc-path: " << halle_gurobi_obj
+            << " vs node-arc: " << na_gurobi_obj << std::endl;
+  if (halle_gurobi_obj < na_gurobi_obj) {
+    // CHECK IF TRIPS FROM HALLE ARE IN TE-GRAPH
+    for (auto const& pg_to_cj : cpg_to_cj_halle) {
+      // is trip contained in te graph?
+      for (auto const& l : pg_to_cj.second.legs_) {
+        auto tr_data = te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
+        if (tr_data == te_graph.trip_data_.end()) {
+          std::cout << "Trip not in expanded graph" << std::endl;
+        } else {
+          std::cout << "Trip found" << std::endl;
+        }
+      }
+    }
+    scenario_stats.close();
+    throw std::runtime_error("trip from halle not in te-graph");
+  }
+  scenario_stats.close();
+  return;
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution

@@ -13,9 +13,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     std::vector<std::vector<bool>> const& nodes_validity,
     time_expanded_graph const& te_graph, node_arc_config const& na_config,
     perceived_tt_config const& tt_config, schedule const& sched,
-    std::map<std::string, std::tuple<double, double, double, double>>&
-        variables_with_values,
-    std::ofstream& results_file) {
+    double& obj_value, std::ofstream& results_file) {
   try {
     auto start = std::chrono::steady_clock::now();
 
@@ -281,17 +279,6 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
       throw std::runtime_error("node-arc-form ILP model: solution not optimal");
     }
 
-    for (auto const& ecv : edge_cost_vars) {
-      for (auto const& curr_ecv : ecv.second) {
-        variables_with_values[curr_ecv.get(GRB_StringAttr_VarName)] =
-            std::make_tuple(curr_ecv.get(GRB_DoubleAttr_X),
-                            curr_ecv.get(GRB_DoubleAttr_Obj),
-                            curr_ecv.get(GRB_DoubleAttr_X) *
-                                curr_ecv.get(GRB_DoubleAttr_Obj),
-                            curr_ecv.get(GRB_DoubleAttr_UB));
-      }
-    }
-
     std::vector<std::vector<eg_edge*>> solution(psg_groups.size());
     for (auto i = 0u; i < psg_groups.size(); ++i) {
       for (auto const& n : te_graph.nodes_) {
@@ -317,6 +304,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
     std::cout << "NUMVARS: " << model.get(GRB_IntAttr_NumVars) << std::endl;
 
+    obj_value = model.get(GRB_DoubleAttr_ObjVal);
     results_file << model.get(GRB_DoubleAttr_ObjVal) << ",";
     /*
     results_file << model.get(GRB_DoubleAttr_ObjVal) << ","
