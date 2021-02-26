@@ -1239,7 +1239,8 @@ void paxassign::heuristic_assignments(
     std::cout << "Trips checked" << std::endl;
     std::cout << "Start to compare legs" << std::endl;
     for (auto const& p : cpg_to_cj_halle) {
-      std::cout << "inspected group id: " << p.first.id_
+      auto loc = p.first.localization_.in_trip() ? " in trip " : " at station ";
+      std::cout << "inspected group id: " << p.first.id_ << loc
                 << " dest: " << p.first.destination_station_id_
                 << " (planned arr time: "
                 << p.first.groups_[0]->planned_arrival_time_ << ")"
@@ -1251,8 +1252,6 @@ void paxassign::heuristic_assignments(
                   << " at " << l.exit_time_ << std::endl;
         std::cout << "----------- greedy to leg target -----------"
                   << std::endl;
-
-        te_graph.st_to_nodes_[l.exit_station_id_];
 
         std::vector<eg_event_node*> relevant_nodes =
             utl::all(te_graph.st_to_nodes_[l.exit_station_id_]) |
@@ -1276,6 +1275,14 @@ void paxassign::heuristic_assignments(
                 std::cout << "e_type: " << e->type_ << std::endl;
                 if (e->type_ == eg_edge_type::TRIP) {
                   std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
+                }
+                std::cout << " all outgoing arcs from localization node: "
+                          << std::endl;
+                for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
+                  std::cout << "e_type: " << oe->type_ << std::endl;
+                  if (oe->type_ == eg_edge_type::TRIP) {
+                    std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
+                  }
                 }
               }
             }
