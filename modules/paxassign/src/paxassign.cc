@@ -1219,13 +1219,16 @@ void paxassign::heuristic_assignments(
     std::cout << "Trips checked" << std::endl;
     std::cout << "Start to compare legs" << std::endl;
     for (auto const& p : cpg_to_cj_halle) {
-      std::cout << "inspected group id: " << p.first.groups_[0]->id_
+      std::cout << "inspected group id: " << p.first.id_
+                << " dest: " << p.first.destination_station_id_
+                << " (planned arr time: "
+                << p.first.groups_[0]->planned_arrival_time_ << ")"
                 << std::endl;
       std::cout << "halle solution: " << std::endl;
       for (auto const& l : p.second.legs_) {
         std::cout << l.trip_->id_.primary_.train_nr_ << " from "
                   << l.enter_station_id_ << " to " << l.exit_station_id_
-                  << std::endl;
+                  << " at " << l.exit_time_ << std::endl;
       }
       std::cout << "na solution: " << std::endl;
       for (int i = 0; i < cpg_to_cj_node_arc.size(); ++i) {
@@ -1233,7 +1236,7 @@ void paxassign::heuristic_assignments(
           for (auto const& l : cpg_to_cj_node_arc[i].second.legs_) {
             std::cout << l.trip_->id_.primary_.train_nr_ << " from "
                       << l.enter_station_id_ << " to " << l.exit_station_id_
-                      << std::endl;
+                      << " at " << l.exit_time_ << std::endl;
           }
         }
       }
