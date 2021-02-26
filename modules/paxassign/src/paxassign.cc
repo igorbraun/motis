@@ -263,6 +263,7 @@ paxassign::cap_ilp_assignment(
                allowed_delay)) {
             remove_alt = true;
           }
+          /*
           if (!remove_alt) {
             // CHECK IF LEG DEP IS EARLIER THAN LOCALIZATION
             for (auto const& l :
@@ -272,6 +273,7 @@ paxassign::cap_ilp_assignment(
               }
             }
           }
+           */
           if (!remove_alt) {
             // CHECK IF TRIPS FROM HALLE ARE IN TE-GRAPH
             for (auto const& l :
@@ -1248,7 +1250,14 @@ void paxassign::heuristic_assignments(
     std::cout << "Trips checked" << std::endl;
     std::cout << "Start to compare legs" << std::endl;
     for (auto const& p : cpg_to_cj_halle) {
-      auto loc = p.first.localization_.in_trip() ? " in trip " : " at station ";
+      std::string loc;
+      if (p.first.localization_.in_trip()) {
+        loc = " in trip " +
+              std::to_string(
+                  p.first.localization_.in_trip_->id_.primary_.train_nr_);
+      } else {
+        loc = " at station ";
+      }
       std::cout << "inspected group id: " << p.first.id_ << loc
                 << " loc time: " << p.first.localization_.current_arrival_time_
                 << " dest: " << p.first.destination_station_id_ << " == "
