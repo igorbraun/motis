@@ -1276,13 +1276,13 @@ void paxassign::heuristic_assignments(
                 if (e->type_ == eg_edge_type::TRIP) {
                   std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
                 }
-                std::cout << " all outgoing arcs from localization node: "
-                          << std::endl;
-                for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
-                  std::cout << "e_type: " << oe->type_ << std::endl;
-                  if (oe->type_ == eg_edge_type::TRIP) {
-                    std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
-                  }
+              }
+              std::cout << " all outgoing arcs from localization node: "
+                        << std::endl;
+              for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
+                std::cout << "e_type: " << oe->type_ << std::endl;
+                if (oe->type_ == eg_edge_type::TRIP) {
+                  std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
                 }
               }
             }
