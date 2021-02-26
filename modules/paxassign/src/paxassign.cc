@@ -1284,7 +1284,9 @@ void paxassign::heuristic_assignments(
                         << std::endl;
               for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
                 std::cout << "e_type: " << oe->type_ << " to "
-                          << oe->to_->station_ << std::endl;
+                          << oe->to_->station_
+                          << " == " << sched.stations_[oe->to_->station_]->name_
+                          << std::endl;
                 if (oe->type_ == eg_edge_type::TRIP) {
                   std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
                 }
