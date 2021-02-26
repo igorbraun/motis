@@ -264,6 +264,15 @@ paxassign::cap_ilp_assignment(
             remove_alt = true;
           }
           if (!remove_alt) {
+            // CHECK IF LEG DEP IS EARLIER THAN LOCALIZATION
+            for (auto const& l :
+                 cpg.alternatives_[curr_alt_ind].compact_journey_.legs_) {
+              if (l.enter_time_ < cpg.localization_.current_arrival_time_) {
+                remove_alt = true;
+              }
+            }
+          }
+          if (!remove_alt) {
             // CHECK IF TRIPS FROM HALLE ARE IN TE-GRAPH
             for (auto const& l :
                  cpg.alternatives_[curr_alt_ind].compact_journey_.legs_) {
