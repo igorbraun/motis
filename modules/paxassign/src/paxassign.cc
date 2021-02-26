@@ -1206,6 +1206,26 @@ void paxassign::heuristic_assignments(
   std::cout << "arc-path: " << halle_gurobi_obj
             << " vs node-arc: " << na_gurobi_obj << std::endl;
 
+  // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
+  // perceived tt for start solution
+  auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
+    if (e->capacity_utilization_ >
+        perc_tt_config.cost_function_capacity_steps_.back()) {
+      return std::numeric_limits<double>::max();
+    }
+    double transfer_penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
+                                  ? perc_tt_config.transfer_penalty_
+                                  : 0.0;
+    auto const it =
+        std::lower_bound(perc_tt_config.cost_function_capacity_steps_.begin(),
+                         perc_tt_config.cost_function_capacity_steps_.end(),
+                         e->capacity_utilization_);
+    auto idx =
+        std::distance(perc_tt_config.cost_function_capacity_steps_.begin(), it);
+    return perc_tt_config.tt_and_waiting_penalties_[idx] * e->cost_ +
+           transfer_penalty + curr_dist;
+  };
+
   if (halle_gurobi_obj < na_gurobi_obj) {
     std::cout << "Start to check trips of legs" << std::endl;
     for (auto const& p : cpg_to_cj_halle) {
@@ -1229,6 +1249,38 @@ void paxassign::heuristic_assignments(
         std::cout << l.trip_->id_.primary_.train_nr_ << " from "
                   << l.enter_station_id_ << " to " << l.exit_station_id_
                   << " at " << l.exit_time_ << std::endl;
+        std::cout << "----------- greedy to leg target -----------"
+                  << std::endl;
+
+        te_graph.st_to_nodes_[l.exit_station_id_];
+
+        std::vector<eg_event_node*> relevant_nodes =
+            utl::all(te_graph.st_to_nodes_[l.exit_station_id_]) |
+            utl::remove_if([&](auto const& n) {
+              return n->type_ != eg_event_type::WAIT ||
+                     n->time_ < l.exit_time_ + 30;
+            }) |
+            utl::vec();
+        if (relevant_nodes.empty()) {
+          std::cout << "no wait nodes at the station" << std::endl;
+        } else {
+          for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+            if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
+              auto greedy_sol = sssd_dijkstra<double>(
+                  eg_psg_groups[i].from_, relevant_nodes[0],
+                  eg_psg_groups[i].psg_count_, 0.0,
+                  std::numeric_limits<double>::max(), te_graph,
+                  nodes_validity[i], 6, calc_perc_tt_dist);
+              std::cout << "Greedy solution: " << std::endl;
+              for (auto const& e : greedy_sol) {
+                std::cout << "e_type: " << e->type_ << std::endl;
+                if (e->type_ == eg_edge_type::TRIP) {
+                  std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
+                }
+              }
+            }
+          }
+        }
       }
       std::cout << "na solution: " << std::endl;
       for (int i = 0; i < cpg_to_cj_node_arc.size(); ++i) {
@@ -1245,26 +1297,6 @@ void paxassign::heuristic_assignments(
 
     throw std::runtime_error("to check");
   }
-
-  // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
-  // perceived tt for start solution
-  auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
-    if (e->capacity_utilization_ >
-        perc_tt_config.cost_function_capacity_steps_.back()) {
-      return std::numeric_limits<double>::max();
-    }
-    double transfer_penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
-                                  ? perc_tt_config.transfer_penalty_
-                                  : 0.0;
-    auto const it =
-        std::lower_bound(perc_tt_config.cost_function_capacity_steps_.begin(),
-                         perc_tt_config.cost_function_capacity_steps_.end(),
-                         e->capacity_utilization_);
-    auto idx =
-        std::distance(perc_tt_config.cost_function_capacity_steps_.begin(), it);
-    return perc_tt_config.tt_and_waiting_penalties_[idx] * e->cost_ +
-           transfer_penalty + curr_dist;
-  };
 
   auto rng = std::mt19937{};
 
