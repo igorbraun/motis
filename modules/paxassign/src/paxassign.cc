@@ -1241,7 +1241,9 @@ void paxassign::heuristic_assignments(
     for (auto const& p : cpg_to_cj_halle) {
       auto loc = p.first.localization_.in_trip() ? " in trip " : " at station ";
       std::cout << "inspected group id: " << p.first.id_ << loc
-                << " dest: " << p.first.destination_station_id_
+                << " loc time: " << p.first.localization_.current_arrival_time_
+                << " dest: " << p.first.destination_station_id_ << " == "
+                << sched.stations_[p.first.destination_station_id_]->name_
                 << " (planned arr time: "
                 << p.first.groups_[0]->planned_arrival_time_ << ")"
                 << std::endl;
@@ -1249,6 +1251,7 @@ void paxassign::heuristic_assignments(
       for (auto const& l : p.second.legs_) {
         std::cout << l.trip_->id_.primary_.train_nr_ << " from "
                   << l.enter_station_id_ << " to " << l.exit_station_id_
+                  << " == " << sched.stations_[l.exit_station_id_]->name_
                   << " at " << l.exit_time_ << std::endl;
         std::cout << "----------- greedy to leg target -----------"
                   << std::endl;
@@ -1266,7 +1269,7 @@ void paxassign::heuristic_assignments(
           for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
             if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
               auto greedy_sol = sssd_dijkstra<double>(
-                  eg_psg_groups[i].from_, relevant_nodes[0],
+                  eg_psg_groups[i].from_, eg_psg_groups[i].to_,
                   eg_psg_groups[i].psg_count_, 0.0,
                   std::numeric_limits<double>::max(), te_graph,
                   nodes_validity[i], 6, calc_perc_tt_dist);
@@ -1280,7 +1283,8 @@ void paxassign::heuristic_assignments(
               std::cout << " all outgoing arcs from localization node: "
                         << std::endl;
               for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
-                std::cout << "e_type: " << oe->type_ << std::endl;
+                std::cout << "e_type: " << oe->type_ << " to "
+                          << oe->to_->station_ << std::endl;
                 if (oe->type_ == eg_edge_type::TRIP) {
                   std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
                 }
