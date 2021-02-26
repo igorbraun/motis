@@ -87,7 +87,6 @@ void print_affected_edges(std::set<eg_edge*> const& affected_edges,
   }
 }
 
-// TODO: to test
 std::vector<double> get_relative_loads(
     std::map<eg_edge*, uint32_t> const& loads) {
   std::vector<double> distr;

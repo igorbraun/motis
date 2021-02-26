@@ -1158,6 +1158,10 @@ void paxassign::heuristic_assignments(
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
+  if (group_size != 35) {
+    return;
+  }
+
   std::cout << "Groups in scenario: " << group_size << std::endl;
 
   config_graph_reduction reduction_config;
@@ -1195,10 +1199,49 @@ void paxassign::heuristic_assignments(
   auto solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
                    perc_tt_config, sched, na_gurobi_obj, scenario_stats);
+  auto cpg_to_cj_node_arc =
+      node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
   // END NODE-ARC
 
   std::cout << "arc-path: " << halle_gurobi_obj
             << " vs node-arc: " << na_gurobi_obj << std::endl;
+
+  if (halle_gurobi_obj < na_gurobi_obj) {
+    std::cout << "Start to check trips of legs" << std::endl;
+    for (auto const& p : cpg_to_cj_halle) {
+      for (auto const& l : p.second.legs_) {
+        if (te_graph.trip_data_.find(to_extern_trip(sched, l.trip_)) ==
+            te_graph.trip_data_.end()) {
+          std::cout << "TRIP NOT IN TE GRAPH" << std::endl;
+        }
+      }
+    }
+    std::cout << "Trips checked" << std::endl;
+    std::cout << "Start to compare legs" << std::endl;
+    for (auto const& p : cpg_to_cj_halle) {
+      std::cout << "inspected group id: " << p.first.groups_[0]->id_
+                << std::endl;
+      std::cout << "halle solution: " << std::endl;
+      for (auto const& l : p.second.legs_) {
+        std::cout << l.trip_->id_.primary_.train_nr_ << " from "
+                  << l.enter_station_id_ << " to " << l.exit_station_id_
+                  << std::endl;
+      }
+      std::cout << "na solution: " << std::endl;
+      for (int i = 0; i < cpg_to_cj_node_arc.size(); ++i) {
+        if (cpg_to_cj_node_arc[i].first.id_ == p.first.id_) {
+          for (auto const& l : cpg_to_cj_node_arc[i].second.legs_) {
+            std::cout << l.trip_->id_.primary_.train_nr_ << " from "
+                      << l.enter_station_id_ << " to " << l.exit_station_id_
+                      << std::endl;
+          }
+        }
+      }
+    }
+    std::cout << "Legs checked" << std::endl;
+
+    throw std::runtime_error("to check");
+  }
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
@@ -1230,9 +1273,6 @@ void paxassign::heuristic_assignments(
       eg_psg_groups, greedy_solution, perc_tt_config);
   std::cout << "manually GREEDY CUMULATIVE: " << greedy_obj << std::endl;
   scenario_stats << greedy_obj << ",";
-
-  // TODO: удалить пассажиров, чьи альтернативы не могут быть найденны в
-  // te-графе
 
   {
     scoped_timer alt_timer{"FIND PROBLEMATIC GROUPS"};
