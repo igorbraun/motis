@@ -1250,7 +1250,9 @@ void paxassign::heuristic_assignments(
       std::cout << "halle solution: " << std::endl;
       for (auto const& l : p.second.legs_) {
         std::cout << l.trip_->id_.primary_.train_nr_ << " from "
-                  << l.enter_station_id_ << " to " << l.exit_station_id_
+                  << l.enter_station_id_
+                  << " == " << sched.stations_[l.enter_station_id_]->name_
+                  << " at " << l.enter_time_ << " to " << l.exit_station_id_
                   << " == " << sched.stations_[l.exit_station_id_]->name_
                   << " at " << l.exit_time_ << std::endl;
         std::cout << "----------- greedy to leg target -----------"
@@ -1283,8 +1285,9 @@ void paxassign::heuristic_assignments(
               std::cout << " all outgoing arcs from localization node: "
                         << std::endl;
               for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
-                std::cout << "e_type: " << oe->type_ << " to "
-                          << oe->to_->station_
+                std::cout << "e_type: " << oe->type_ << " from time "
+                          << oe->from_->time_ << " to time " << oe->to_->time_
+                          << " to station " << oe->to_->station_
                           << " == " << sched.stations_[oe->to_->station_]->name_
                           << std::endl;
                 if (oe->type_ == eg_edge_type::TRIP) {
