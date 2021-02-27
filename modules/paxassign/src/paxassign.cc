@@ -1266,6 +1266,7 @@ void paxassign::heuristic_assignments(
                 << p.first.groups_[0]->planned_arrival_time_ << ")"
                 << std::endl;
       std::cout << "halle solution: " << std::endl;
+
       for (auto const& l : p.second.legs_) {
         std::cout << l.trip_->id_.primary_.train_nr_ << " from "
                   << l.enter_station_id_
@@ -1273,49 +1274,89 @@ void paxassign::heuristic_assignments(
                   << " at " << l.enter_time_ << " to " << l.exit_station_id_
                   << " == " << sched.stations_[l.exit_station_id_]->name_
                   << " at " << l.exit_time_ << std::endl;
-        std::cout << "----------- greedy to leg target -----------"
-                  << std::endl;
+      }
 
-        std::vector<eg_event_node*> relevant_nodes =
-            utl::all(te_graph.st_to_nodes_[l.exit_station_id_]) |
-            utl::remove_if([&](auto const& n) {
-              return n->type_ != eg_event_type::WAIT ||
-                     n->time_ < l.exit_time_ + 30;
-            }) |
-            utl::vec();
-        if (relevant_nodes.empty()) {
-          std::cout << "no wait nodes at the station" << std::endl;
-        } else {
-          for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-            if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
-              auto greedy_sol = sssd_dijkstra<double>(
-                  eg_psg_groups[i].from_, eg_psg_groups[i].to_,
-                  eg_psg_groups[i].psg_count_, 0.0,
-                  std::numeric_limits<double>::max(), te_graph,
-                  nodes_validity[i], 6, calc_perc_tt_dist);
-              std::cout << "Greedy solution: " << std::endl;
-              for (auto const& e : greedy_sol) {
-                std::cout << "e_type: " << e->type_ << std::endl;
-                if (e->type_ == eg_edge_type::TRIP) {
-                  std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
-                }
-              }
-              std::cout << " all outgoing arcs from localization node: "
-                        << std::endl;
-              for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
-                std::cout << "e_type: " << oe->type_ << " from time "
-                          << oe->from_->time_ << " to time " << oe->to_->time_
-                          << " to station " << oe->to_->station_
-                          << " == " << sched.stations_[oe->to_->station_]->name_
-                          << std::endl;
-                if (oe->type_ == eg_edge_type::TRIP) {
-                  std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
-                }
+      std::cout << " all outgoing arcs from localization node: " << std::endl;
+      for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+        if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
+          for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
+            std::cout << "e_type: " << oe->type_ << " from time "
+                      << oe->from_->time_ << " to time " << oe->to_->time_
+                      << " to station " << oe->to_->station_
+                      << " == " << sched.stations_[oe->to_->station_]->name_
+                      << std::endl;
+            if (oe->type_ == eg_edge_type::TRIP) {
+              std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
+            }
+          }
+        }
+      }
+
+      std::cout << "----------- greedy to leg target -----------" << std::endl;
+      std::vector<eg_event_node*> nodes_along_conn;
+      for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+        if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
+          nodes_along_conn.push_back(eg_psg_groups[i].from_);
+        }
+      }
+      for (auto const& l : p.second.legs_) {
+        for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+          if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
+            auto relevant_trip =
+                te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
+            for (auto const* rel_tr_e : relevant_trip->second.get()->edges_) {
+              if (rel_tr_e->to_->time_ == l.exit_time_) {
+                nodes_along_conn.push_back(rel_tr_e->to_);
               }
             }
           }
         }
       }
+      for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+        if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
+          nodes_along_conn.push_back(eg_psg_groups[i].to_);
+        }
+      }
+
+      for (int i = 0u; i < nodes_along_conn.size() - 1; ++i) {
+        auto greedy_sol =
+            sssd_dijkstra<double>(nodes_along_conn[i], nodes_along_conn[i + 1],
+                                  eg_psg_groups[i].psg_count_, 0.0,
+                                  std::numeric_limits<double>::max(), te_graph,
+                                  nodes_validity[i], 6, calc_perc_tt_dist);
+        std::cout << "Greedy solution from " << nodes_along_conn[i]->station_
+                  << " == "
+                  << sched.stations_[nodes_along_conn[i]->station_]->name_
+                  << " to " << nodes_along_conn[i + 1]->station_ << " == "
+                  << sched.stations_[nodes_along_conn[i + 1]->station_]->name_
+                  << std::endl;
+        for (auto const& e : greedy_sol) {
+          std::cout << "e_type: " << e->type_ << std::endl;
+          if (e->type_ == eg_edge_type::TRIP) {
+            std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
+          }
+        }
+      }
+      std::cout << "AGAIN greedy but psg size = 0" << std::endl;
+      for (int i = 0u; i < nodes_along_conn.size() - 1; ++i) {
+        auto greedy_sol = sssd_dijkstra<double>(
+            nodes_along_conn[i], nodes_along_conn[i + 1], 0, 0.0,
+            std::numeric_limits<double>::max(), te_graph, nodes_validity[i], 6,
+            calc_perc_tt_dist);
+        std::cout << "Greedy solution from " << nodes_along_conn[i]->station_
+                  << " == "
+                  << sched.stations_[nodes_along_conn[i]->station_]->name_
+                  << " to " << nodes_along_conn[i + 1]->station_ << " == "
+                  << sched.stations_[nodes_along_conn[i + 1]->station_]->name_
+                  << std::endl;
+        for (auto const& e : greedy_sol) {
+          std::cout << "e_type: " << e->type_ << std::endl;
+          if (e->type_ == eg_edge_type::TRIP) {
+            std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
+          }
+        }
+      }
+
       std::cout << "na solution: " << std::endl;
       for (int i = 0; i < cpg_to_cj_node_arc.size(); ++i) {
         if (cpg_to_cj_node_arc[i].first.id_ == p.first.id_) {
