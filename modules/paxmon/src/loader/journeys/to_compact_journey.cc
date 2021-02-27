@@ -21,9 +21,9 @@ compact_journey to_compact_journey(journey const& j, schedule const& sched) {
         auto const to_station_id = get_station(sched, to_stop.eva_no_)->index_;
 
         auto const enter_time = unix_to_motistime(
-            sched.schedule_begin_, from_stop.departure_.schedule_timestamp_);
+            sched.schedule_begin_, from_stop.departure_.timestamp_);
         auto const exit_time = unix_to_motistime(
-            sched.schedule_begin_, to_stop.arrival_.schedule_timestamp_);
+            sched.schedule_begin_, to_stop.arrival_.timestamp_);
 
         cj.legs_.emplace_back(journey_leg{trp, from_station_id, to_station_id,
                                           enter_time, exit_time, ti});
