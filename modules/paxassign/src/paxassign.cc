@@ -1306,13 +1306,17 @@ void paxassign::heuristic_assignments(
                 te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
             if (relevant_trip != te_graph.trip_data_.end()) {
               std::cout << "Trip found" << std::endl;
+              bool node_found = false;
               for (auto const* rel_tr_e : relevant_trip->second.get()->edges_) {
                 if (rel_tr_e->to_->time_ == l.exit_time_) {
-                  std::cout << "Event node found" << std::endl;
+                  node_found = true;
                   nodes_along_conn.push_back(rel_tr_e->to_);
-                } else {
-                  std::cout << "Event node NOT found" << std::endl;
                 }
+              }
+              if (node_found) {
+                std::cout << "Event node found" << std::endl;
+              } else {
+                std::cout << "Event node NOT found" << std::endl;
               }
             } else {
               std::cout << "Trip NOT found" << std::endl;
