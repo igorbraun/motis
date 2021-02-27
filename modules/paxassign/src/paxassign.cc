@@ -1308,7 +1308,7 @@ void paxassign::heuristic_assignments(
               std::cout << "Trip found" << std::endl;
               bool node_found = false;
               for (auto const* rel_tr_e : relevant_trip->second.get()->edges_) {
-                if (rel_tr_e->to_->time_ == l.exit_time_) {
+                if (rel_tr_e->to_->station_ == l.exit_station_id_) {
                   node_found = true;
                   nodes_along_conn.push_back(rel_tr_e->to_);
                 }
