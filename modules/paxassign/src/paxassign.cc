@@ -1341,7 +1341,8 @@ void paxassign::heuristic_assignments(
                   << sched.stations_[nodes_along_conn[i]->station_]->name_
                   << " to " << nodes_along_conn[i + 1]->station_ << " == "
                   << sched.stations_[nodes_along_conn[i + 1]->station_]->name_
-                  << std::endl;
+                  << " from time " << nodes_along_conn[i]->time_ << " to time "
+                  << nodes_along_conn[i + 1]->time_ << std::endl;
         for (auto const& e : greedy_sol) {
           std::cout << "e_type: " << e->type_ << std::endl;
           if (e->type_ == eg_edge_type::TRIP) {
@@ -1360,7 +1361,8 @@ void paxassign::heuristic_assignments(
                   << sched.stations_[nodes_along_conn[i]->station_]->name_
                   << " to " << nodes_along_conn[i + 1]->station_ << " == "
                   << sched.stations_[nodes_along_conn[i + 1]->station_]->name_
-                  << std::endl;
+                  << " from time " << nodes_along_conn[i]->time_ << " to time "
+                  << nodes_along_conn[i + 1]->time_ << std::endl;
         for (auto const& e : greedy_sol) {
           std::cout << "e_type: " << e->type_ << std::endl;
           if (e->type_ == eg_edge_type::TRIP) {
