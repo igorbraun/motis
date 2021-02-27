@@ -1304,10 +1304,18 @@ void paxassign::heuristic_assignments(
           if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
             auto relevant_trip =
                 te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
-            for (auto const* rel_tr_e : relevant_trip->second.get()->edges_) {
-              if (rel_tr_e->to_->time_ == l.exit_time_) {
-                nodes_along_conn.push_back(rel_tr_e->to_);
+            if (relevant_trip != te_graph.trip_data_.end()) {
+              std::cout << "Trip found" << std::endl;
+              for (auto const* rel_tr_e : relevant_trip->second.get()->edges_) {
+                if (rel_tr_e->to_->time_ == l.exit_time_) {
+                  std::cout << "Event node found" << std::endl;
+                  nodes_along_conn.push_back(rel_tr_e->to_);
+                } else {
+                  std::cout << "Event node NOT found" << std::endl;
+                }
               }
+            } else {
+              std::cout << "Trip NOT found" << std::endl;
             }
           }
         }
