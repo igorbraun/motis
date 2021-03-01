@@ -4,7 +4,8 @@
 
 namespace motis::paxassign {
 
-std::set<eg_event_node*> BFS(eg_edge* previous_edge, uint8_t const max_depth) {
+std::vector<eg_event_node*> BFS(eg_edge* previous_edge,
+                                uint8_t const max_depth) {
   typedef std::pair<eg_event_node*, int8_t> node_depth;
   std::set<eg_event_node*> result;
 
@@ -24,7 +25,7 @@ std::set<eg_event_node*> BFS(eg_edge* previous_edge, uint8_t const max_depth) {
       }
     }
   }
-  return result;
+  return std::vector<eg_event_node*>(result.begin(), result.end());
 }
 
 struct arc_load_stat {
@@ -180,13 +181,6 @@ std::vector<std::vector<eg_edge*>> local_search(
   // the new connection into the current solution. Otherwise, throw it away
   // 6. Goto 1 until the termination criterion is not reached
 
-  // Possible improvements:
-  // 1. Consider the capacity utilization of edges by choosing the group in 1
-  // or the station in 2
-  // 2. In step 3 go not only in the future, but also in the past
-  // 3. In step 2 do it not only with 1 station X, select 2 random stations
-  // and do 3 dijkstra's
-
   auto curr_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, start_solution, config);
 
@@ -201,35 +195,34 @@ std::vector<std::vector<eg_edge*>> local_search(
   // Initialization
   std::uniform_int_distribution<> groups_distr(0, eg_psg_groups.size() - 1);
   std::uniform_int_distribution<> steps_to_go(1, max_steps);
+  std::uniform_real_distribution<> stops_distr(0.0, 1.0);
 
-  int const max_iterations = 100;
+  int const max_iterations = eg_psg_groups.size();
   for (auto i = 0u; i < max_iterations; ++i) {
     // Step 1
     auto gr_idx = groups_distr(rng);
     // Step 2
-    std::uniform_int_distribution<> curr_psg_distr(0,
-                                                   solution[gr_idx].size() - 1);
-    auto edge_idx = curr_psg_distr(rng);
+    int edge_idx = (int)((solution[gr_idx].size() - 1) * stops_distr(rng));
     // Step 3
     auto nodes_to_check = BFS(solution[gr_idx][edge_idx], max_steps);
+    std::shuffle(std::begin(nodes_to_check), std::end(nodes_to_check), rng);
     // Step 4
-
     remove_psgs_from_edges(solution[gr_idx], eg_psg_groups[gr_idx]);
+    int handled_nodes = 0;
     for (auto const& n : nodes_to_check) {
+      ++handled_nodes;
       auto route_part_one = sssd_dijkstra<double>(
           eg_psg_groups[gr_idx].from_, n, eg_psg_groups[gr_idx].psg_count_, 0.0,
           std::numeric_limits<double>::max(), te_graph, nodes_validity[gr_idx],
           max_interchanges, obj_f);
+      if (route_part_one.empty()) continue;
       auto route_part_two = sssd_dijkstra<double>(
           n, eg_psg_groups[gr_idx].to_, eg_psg_groups[gr_idx].psg_count_, 0.0,
           std::numeric_limits<double>::max(), te_graph, nodes_validity[gr_idx],
           max_interchanges, obj_f);
-      if (route_part_one.empty() || route_part_two.empty()) {
-        continue;
-      }
+      if (route_part_two.empty()) continue;
       route_part_one.insert(route_part_one.end(), route_part_two.begin(),
                             route_part_two.end());
-
       auto const num_interchanges = std::count_if(
           route_part_one.begin(), route_part_one.end(),
           [](eg_edge* e) { return e->type_ == eg_edge_type::TRAIN_ENTRY; });
@@ -252,14 +245,12 @@ std::vector<std::vector<eg_edge*>> local_search(
       }
       remove_psgs_from_edges(route_part_one, eg_psg_groups[gr_idx]);
 
-      // std::cout << curr_obj << " vs " << new_obj << std::endl;
       if (new_obj < curr_obj) {
         curr_obj = new_obj;
-        curr_psg_distr =
-            std::uniform_int_distribution<>(0, solution[gr_idx].size() - 1);
       } else {
         solution[gr_idx] = previous_solution;
       }
+      if (handled_nodes >= 10) break;
     }
     add_psgs_to_edges(solution[gr_idx], eg_psg_groups[gr_idx]);
   }

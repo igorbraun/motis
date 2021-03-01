@@ -1169,53 +1169,99 @@ void paxassign::heuristic_assignments(
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
-  if (group_size != 35) {
-    return;
-  }
 
   std::cout << "Groups in scenario: " << group_size << std::endl;
 
-  config_graph_reduction reduction_config;
+  std::time_t unique_key = std::time(nullptr);
 
-  // HALLE #----------------------------#
-  std::string scenario_stats_f_name = "heuristics_temp_stats.csv";
-  bool scenario_stats_f_existed =
-      std::filesystem::exists(scenario_stats_f_name);
-  std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
-  if (!scenario_stats_f_existed) {
-    scenario_stats
-        << "gr_size,AP_obj,NA_obj,greedy_obj,load_based,delay_based\n";
+  std::string obj_f_name = "heur_eval/heur_eval_objs_60.csv";
+  bool obj_f_existed = std::filesystem::exists(obj_f_name);
+  std::ofstream obj_stats(obj_f_name, std::ios_base::app);
+  if (!obj_f_existed) {
+    obj_stats << "ts,gr_size,AP_obj,NA_obj,greedy_obj,load_based,delay_based,"
+                 "ls_obj\n";
   }
-  scenario_stats << group_size << ",";
+
+  std::string time_f_name = "heur_eval/heur_eval_times_60.csv";
+  bool time_f_existed = std::filesystem::exists(time_f_name);
+  std::ofstream time_stats(time_f_name, std::ios_base::app);
+  if (!time_f_existed) {
+    time_stats << "ts,AP_time,adding_to_graph_time,filtering_time,NA_time,"
+                  "greedy_time,finding_probl_groups_time,load_order_greedy_"
+                  "time,delay_order_greedy_time,ls_time\n";
+  }
+
+  std::string solution_compar_f_name = "heur_eval/solutions_comp_60.csv";
+  bool solution_compar_f_existed =
+      std::filesystem::exists(solution_compar_f_name);
+  std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
+  if (!solution_compar_f_existed) {
+    solutions_compar << "ts,na_exit_diff,na_inchs,halle_exit_diff,halle_inchs,"
+                        "greedy_exit_diff,greedy_inchs,load_greedy_exit_diff,"
+                        "load_greedy_inchs,delay_greedy_exit_diff,delay_greedy_"
+                        "inchs,ls_exit_diff,ls_inchs\n";
+  }
+
+  std::string loads_f_name = "heur_eval/loads_60.csv";
+  std::ofstream loads(loads_f_name, std::ios_base::app);
+
+  obj_stats << unique_key << "," << group_size << ",";
+  time_stats << unique_key << ",";
+
+  config_graph_reduction reduction_config;
+  // HALLE #----------------------------#
 
   double halle_gurobi_obj;
+  auto start = std::chrono::steady_clock::now();
   auto cpg_to_cj_halle =
       cap_ilp_assignment(combined_groups, data, reduction_config.allowed_delay_,
-                         sched, te_graph, halle_gurobi_obj, scenario_stats);
+                         sched, te_graph, halle_gurobi_obj, obj_stats);
+  auto end = std::chrono::steady_clock::now();
+  auto AP_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << AP_time << ",";
   // END HALLE #------------------------#
 
+  start = std::chrono::steady_clock::now();
   auto eg_psg_groups =
       add_psgs_to_te_graph(combined_groups, sched, eg_config, te_graph);
+  end = std::chrono::steady_clock::now();
+  auto adding_to_graph_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << adding_to_graph_time << ",";
+
   std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  start = std::chrono::steady_clock::now();
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
     nodes_validity[i] =
         reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
+  end = std::chrono::steady_clock::now();
+  auto filtering_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << filtering_time << ",";
 
   perceived_tt_config perc_tt_config;
 
   // NODE-ARC
   node_arc_config na_config{1.2, 30, 6, 10000};
   double na_gurobi_obj;
+  start = std::chrono::steady_clock::now();
   auto solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
-                   perc_tt_config, sched, na_gurobi_obj, scenario_stats);
+                   perc_tt_config, sched, na_gurobi_obj, obj_stats);
+  end = std::chrono::steady_clock::now();
+  auto NA_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << NA_time << ",";
+
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
   // END NODE-ARC
-
-  std::cout << "arc-path: " << halle_gurobi_obj
-            << " vs node-arc: " << na_gurobi_obj << std::endl;
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
   // perceived tt for start solution
@@ -1237,206 +1283,278 @@ void paxassign::heuristic_assignments(
            transfer_penalty + curr_dist;
   };
 
-  if (halle_gurobi_obj < na_gurobi_obj) {
-    std::cout << "Start to check trips of legs" << std::endl;
-    for (auto const& p : cpg_to_cj_halle) {
-      for (auto const& l : p.second.legs_) {
-        if (te_graph.trip_data_.find(to_extern_trip(sched, l.trip_)) ==
-            te_graph.trip_data_.end()) {
-          std::cout << "TRIP NOT IN TE GRAPH" << std::endl;
-        }
-      }
-    }
-    std::cout << "Trips checked" << std::endl;
-    std::cout << "Start to compare legs" << std::endl;
-    for (auto const& p : cpg_to_cj_halle) {
-      std::string loc;
-      if (p.first.localization_.in_trip()) {
-        loc = " in trip " +
-              std::to_string(
-                  p.first.localization_.in_trip_->id_.primary_.train_nr_);
-      } else {
-        loc = " at station ";
-      }
-      std::cout << "inspected group id: " << p.first.id_ << loc
-                << " loc time: " << p.first.localization_.current_arrival_time_
-                << " dest: " << p.first.destination_station_id_ << " == "
-                << sched.stations_[p.first.destination_station_id_]->name_
-                << " (planned arr time: "
-                << p.first.groups_[0]->planned_arrival_time_ << ")"
-                << std::endl;
-      std::cout << "halle solution: " << std::endl;
-
-      for (auto const& l : p.second.legs_) {
-        std::cout << l.trip_->id_.primary_.train_nr_ << " from "
-                  << l.enter_station_id_
-                  << " == " << sched.stations_[l.enter_station_id_]->name_
-                  << " at " << l.enter_time_ << " to " << l.exit_station_id_
-                  << " == " << sched.stations_[l.exit_station_id_]->name_
-                  << " at " << l.exit_time_ << std::endl;
-      }
-
-      std::cout << " all outgoing arcs from localization node: " << std::endl;
-      for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-        if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
-          for (auto const& oe : eg_psg_groups[i].from_->out_edges_) {
-            std::cout << "e_type: " << oe->type_ << " from time "
-                      << oe->from_->time_ << " to time " << oe->to_->time_
-                      << " to station " << oe->to_->station_
-                      << " == " << sched.stations_[oe->to_->station_]->name_
-                      << std::endl;
-            if (oe->type_ == eg_edge_type::TRIP) {
-              std::cout << oe->trip_->id_.primary_.train_nr_ << std::endl;
-            }
-          }
-        }
-      }
-
-      std::cout << "----------- greedy to leg target -----------" << std::endl;
-      std::vector<eg_event_node*> nodes_along_conn;
-      for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-        if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
-          nodes_along_conn.push_back(eg_psg_groups[i].from_);
-        }
-      }
-      for (auto const& l : p.second.legs_) {
-        for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-          if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
-            auto relevant_trip =
-                te_graph.trip_data_.find(to_extern_trip(sched, l.trip_));
-            if (relevant_trip != te_graph.trip_data_.end()) {
-              std::cout << "Trip found" << std::endl;
-              bool node_found = false;
-              for (auto const* rel_tr_e : relevant_trip->second.get()->edges_) {
-                if (rel_tr_e->to_->station_ == l.exit_station_id_) {
-                  node_found = true;
-                  nodes_along_conn.push_back(rel_tr_e->to_);
-                }
-              }
-              if (node_found) {
-                std::cout << "Event node found" << std::endl;
-              } else {
-                std::cout << "Event node NOT found" << std::endl;
-              }
-            } else {
-              std::cout << "Trip NOT found" << std::endl;
-            }
-          }
-        }
-      }
-      for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-        if (eg_psg_groups[i].cpg_.id_ == p.first.id_) {
-          nodes_along_conn.push_back(eg_psg_groups[i].to_);
-        }
-      }
-
-      for (int i = 0u; i < nodes_along_conn.size() - 1; ++i) {
-        auto greedy_sol =
-            sssd_dijkstra<double>(nodes_along_conn[i], nodes_along_conn[i + 1],
-                                  eg_psg_groups[i].psg_count_, 0.0,
-                                  std::numeric_limits<double>::max(), te_graph,
-                                  nodes_validity[i], 6, calc_perc_tt_dist);
-        std::cout << "Greedy solution from " << nodes_along_conn[i]->station_
-                  << " == "
-                  << sched.stations_[nodes_along_conn[i]->station_]->name_
-                  << " to " << nodes_along_conn[i + 1]->station_ << " == "
-                  << sched.stations_[nodes_along_conn[i + 1]->station_]->name_
-                  << " from time " << nodes_along_conn[i]->time_ << " to time "
-                  << nodes_along_conn[i + 1]->time_ << std::endl;
-        for (auto const& e : greedy_sol) {
-          std::cout << "e_type: " << e->type_ << std::endl;
-          if (e->type_ == eg_edge_type::TRIP) {
-            std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
-          }
-        }
-      }
-      std::cout << "AGAIN greedy but psg size = 0" << std::endl;
-      for (int i = 0u; i < nodes_along_conn.size() - 1; ++i) {
-        auto greedy_sol = sssd_dijkstra<double>(
-            nodes_along_conn[i], nodes_along_conn[i + 1], 0, 0.0,
-            std::numeric_limits<double>::max(), te_graph, nodes_validity[i], 6,
-            calc_perc_tt_dist);
-        std::cout << "Greedy solution from " << nodes_along_conn[i]->station_
-                  << " == "
-                  << sched.stations_[nodes_along_conn[i]->station_]->name_
-                  << " to " << nodes_along_conn[i + 1]->station_ << " == "
-                  << sched.stations_[nodes_along_conn[i + 1]->station_]->name_
-                  << " from time " << nodes_along_conn[i]->time_ << " to time "
-                  << nodes_along_conn[i + 1]->time_ << std::endl;
-        for (auto const& e : greedy_sol) {
-          std::cout << "e_type: " << e->type_ << std::endl;
-          if (e->type_ == eg_edge_type::TRIP) {
-            std::cout << e->trip_->id_.primary_.train_nr_ << std::endl;
-          }
-        }
-      }
-
-      std::cout << "na solution: " << std::endl;
-      for (int i = 0; i < cpg_to_cj_node_arc.size(); ++i) {
-        if (cpg_to_cj_node_arc[i].first.id_ == p.first.id_) {
-          for (auto const& l : cpg_to_cj_node_arc[i].second.legs_) {
-            std::cout << l.trip_->id_.primary_.train_nr_ << " from "
-                      << l.enter_station_id_ << " to " << l.exit_station_id_
-                      << " at " << l.exit_time_ << std::endl;
-          }
-        }
-      }
-    }
-    std::cout << "Legs checked" << std::endl;
-
-    throw std::runtime_error("to check");
-  }
-
   auto rng = std::mt19937{};
-
   // Start solution for local search. calc_perc_tt_dist is used
+  start = std::chrono::steady_clock::now();
   auto greedy_solution = greedy_assignment(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, rng, calc_perc_tt_dist);
+  end = std::chrono::steady_clock::now();
+  auto greedy_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << greedy_time << ",";
   double greedy_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, greedy_solution, perc_tt_config);
   std::cout << "manually GREEDY CUMULATIVE: " << greedy_obj << std::endl;
-  scenario_stats << greedy_obj << ",";
+  obj_stats << greedy_obj << ",";
+  auto cpg_to_cj_greedy =
+      node_arc_solution_to_compact_j(eg_psg_groups, greedy_solution, sched);
 
-  {
-    scoped_timer alt_timer{"FIND PROBLEMATIC GROUPS"};
-    std::vector<int> load_based_order;
-    std::vector<int> delay_based_order;
-    find_problematic_groups(eg_psg_groups, greedy_solution, load_based_order,
-                            delay_based_order);
-    auto load_order_solution = greedy_assignment_spec_order(
-        te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
-        eg_psg_groups, load_based_order, calc_perc_tt_dist);
-    double load_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
-        eg_psg_groups, load_order_solution, perc_tt_config);
-    std::cout << "load_order_obj GREEDY CUMULATIVE: " << load_order_obj
-              << std::endl;
-    scenario_stats << load_order_obj << ",";
+  std::vector<int> load_based_order;
+  std::vector<int> delay_based_order;
+  start = std::chrono::steady_clock::now();
+  find_problematic_groups(eg_psg_groups, greedy_solution, load_based_order,
+                          delay_based_order);
+  end = std::chrono::steady_clock::now();
+  auto finding_probl_groups_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << finding_probl_groups_time << ",";
 
-    auto delay_order_solution = greedy_assignment_spec_order(
-        te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
-        eg_psg_groups, delay_based_order, calc_perc_tt_dist);
-    double delay_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
-        eg_psg_groups, delay_order_solution, perc_tt_config);
-    std::cout << "delay_order_obj GREEDY CUMULATIVE: " << delay_order_obj
-              << std::endl;
-    scenario_stats << delay_order_obj << "\n";
+  start = std::chrono::steady_clock::now();
+  auto load_order_solution = greedy_assignment_spec_order(
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, load_based_order, calc_perc_tt_dist);
+  end = std::chrono::steady_clock::now();
+  auto load_order_greedy_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << load_order_greedy_time << ",";
+  auto cpg_to_cj_LO_greedy =
+      node_arc_solution_to_compact_j(eg_psg_groups, load_order_solution, sched);
+  double load_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, load_order_solution, perc_tt_config);
+  std::cout << "load_order_obj GREEDY CUMULATIVE: " << load_order_obj
+            << std::endl;
+  obj_stats << load_order_obj << ",";
+
+  start = std::chrono::steady_clock::now();
+  auto delay_order_solution = greedy_assignment_spec_order(
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, delay_based_order, calc_perc_tt_dist);
+  end = std::chrono::steady_clock::now();
+  auto delay_order_greedy_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << delay_order_greedy_time << ",";
+  double delay_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, delay_order_solution, perc_tt_config);
+  std::cout << "delay_order_obj GREEDY CUMULATIVE: " << delay_order_obj
+            << std::endl;
+  obj_stats << delay_order_obj << ",";
+  auto cpg_to_cj_DO_greedy = node_arc_solution_to_compact_j(
+      eg_psg_groups, delay_order_solution, sched);
+
+  start = std::chrono::steady_clock::now();
+  auto ls_solution = local_search(
+      eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
+      nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
+  end = std::chrono::steady_clock::now();
+  auto ls_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << ls_time << "\n";
+
+  auto ls_obj = piecewise_linear_convex_perceived_tt_node_arc(
+      eg_psg_groups, ls_solution, perc_tt_config);
+  std::cout << "manually LS CUMULATIVE: " << ls_obj << std::endl;
+  obj_stats << ls_obj << "\n";
+  auto cpg_to_cj_LS =
+      node_arc_solution_to_compact_j(eg_psg_groups, ls_solution, sched);
+
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      solutions_compar << unique_key << ",";
+      // PLANNED
+      auto planned_exit = (*cpg.groups_.begin())
+                              ->compact_planned_journey_.legs_.back()
+                              .exit_time_;
+
+      // NODE-ARC
+      auto na_sol = std::find_if(
+          cpg_to_cj_node_arc.begin(), cpg_to_cj_node_arc.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (na_sol == cpg_to_cj_node_arc.end()) {
+        throw std::runtime_error("didn't find node-arc solution");
+      }
+      if (na_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto na_exit = na_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)na_exit - planned_exit << ",";
+        auto na_interchanges = na_sol->second.legs_.size() - 1;
+        solutions_compar << na_interchanges << ",";
+      }
+
+      // HALLE
+      auto halle_sol = std::find_if(
+          cpg_to_cj_halle.begin(), cpg_to_cj_halle.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (halle_sol == cpg_to_cj_halle.end()) {
+        throw std::runtime_error("didn't find halle solution");
+      }
+      if (halle_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto halle_exit = halle_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)halle_exit - planned_exit << ",";
+        auto halle_interchanges = halle_sol->second.legs_.size() - 1;
+        solutions_compar << halle_interchanges << "\n";
+      }
+
+      // Greedy
+      auto greedy_sol = std::find_if(
+          cpg_to_cj_greedy.begin(), cpg_to_cj_greedy.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (greedy_sol == cpg_to_cj_greedy.end()) {
+        throw std::runtime_error("didn't find greedy solution");
+      }
+      if (greedy_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto greedy_exit = greedy_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)greedy_exit - planned_exit << ",";
+        auto greedy_interchanges = greedy_sol->second.legs_.size() - 1;
+        solutions_compar << greedy_interchanges << ",";
+      }
+
+      // LO Greedy
+      auto LO_greedy_sol = std::find_if(
+          cpg_to_cj_LO_greedy.begin(), cpg_to_cj_LO_greedy.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (LO_greedy_sol == cpg_to_cj_LO_greedy.end()) {
+        throw std::runtime_error("didn't find LO greedy solution");
+      }
+      if (LO_greedy_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto LO_greedy_exit = LO_greedy_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)LO_greedy_exit - planned_exit << ",";
+        auto LO_greedy_interchanges = LO_greedy_sol->second.legs_.size() - 1;
+        solutions_compar << LO_greedy_interchanges << ",";
+      }
+
+      // DO Greedy
+      auto DO_greedy_sol = std::find_if(
+          cpg_to_cj_DO_greedy.begin(), cpg_to_cj_DO_greedy.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (DO_greedy_sol == cpg_to_cj_DO_greedy.end()) {
+        throw std::runtime_error("didn't find DO greedy solution");
+      }
+      if (DO_greedy_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto DO_greedy_exit = DO_greedy_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)DO_greedy_exit - planned_exit << ",";
+        auto DO_greedy_interchanges = DO_greedy_sol->second.legs_.size() - 1;
+        solutions_compar << DO_greedy_interchanges << ",";
+      }
+
+      // LS
+      auto LS_sol = std::find_if(
+          cpg_to_cj_LS.begin(), cpg_to_cj_LS.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (LS_sol == cpg_to_cj_LS.end()) {
+        throw std::runtime_error("didn't find LS solution");
+      }
+      if (LS_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto LS_exit = LS_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)LS_exit - planned_exit << ",";
+        auto LS_interchanges = LS_sol->second.legs_.size() - 1;
+        solutions_compar << LS_interchanges << ",";
+      }
+    }
   }
 
-  /*
-  {
-    scoped_timer alt_timer{"LOCAL SEARCH"};
-    auto ls_solution = local_search(
-        eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
-        nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
+  auto halle_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_halle, te_graph, sched);
+  auto node_arc_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_node_arc, te_graph, sched);
+  auto greedy_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_greedy, te_graph, sched);
+  auto LO_greedy_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_LO_greedy, te_graph, sched);
+  auto DO_greedy_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_DO_greedy, te_graph, sched);
+  auto LS_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_LS, te_graph, sched);
 
-    final_obj = piecewise_linear_convex_perceived_tt_node_arc(
-        eg_psg_groups, ls_solution, perc_tt_config);
-    std::cout << "manually LS CUMULATIVE: " << final_obj << std::endl;
-    scenario_stats << final_obj << "\n";
+  std::set<eg_edge*> all_affected_edges;
+  add_affected_edges_from_sol(halle_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(greedy_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(LO_greedy_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(DO_greedy_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(LS_affected_edges, all_affected_edges);
+
+  auto arc_path_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, halle_affected_edges);
+  auto rel_halle_loads = get_relative_loads(arc_path_resulting_load);
+  loads << unique_key << ",ap";
+  for (auto const l : rel_halle_loads) {
+    loads << "," << l;
   }
-  */
-  scenario_stats.close();
+  loads << "\n";
+
+  auto node_arc_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, node_arc_affected_edges);
+  auto rel_node_arc_loads = get_relative_loads(node_arc_resulting_load);
+  loads << unique_key << ",na";
+  for (auto const l : rel_node_arc_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  auto greedy_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, greedy_affected_edges);
+  auto rel_greedy_loads = get_relative_loads(greedy_resulting_load);
+  loads << unique_key << ",greedy";
+  for (auto const l : rel_greedy_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  auto LO_greedy_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, LO_greedy_affected_edges);
+  auto rel_LO_greedy_loads = get_relative_loads(LO_greedy_resulting_load);
+  loads << unique_key << ",LO_greedy";
+  for (auto const l : rel_LO_greedy_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  auto DO_greedy_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, DO_greedy_affected_edges);
+  auto rel_DO_greedy_loads = get_relative_loads(DO_greedy_resulting_load);
+  loads << unique_key << ",DO_greedy";
+  for (auto const l : rel_DO_greedy_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  auto LS_resulting_load =
+      get_final_edges_load_for_solution(all_affected_edges, LS_affected_edges);
+  auto rel_LS_loads = get_relative_loads(LS_resulting_load);
+  loads << unique_key << ",LS";
+  for (auto const l : rel_LS_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  obj_stats.close();
+  solutions_compar.close();
+  loads.close();
+  time_stats.close();
+
   // throw std::runtime_error("heuristic algorithms finished");
 }
 
