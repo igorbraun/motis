@@ -1175,7 +1175,7 @@ void paxassign::heuristic_assignments(
 
   std::time_t unique_key = std::time(nullptr);
 
-  std::string obj_f_name = "heur_eval/heur_eval_objs_75.csv";
+  std::string obj_f_name = "heur_eval/heur_eval_objs_70.csv";
   bool obj_f_existed = std::filesystem::exists(obj_f_name);
   std::ofstream obj_stats(obj_f_name, std::ios_base::app);
   if (!obj_f_existed) {
@@ -1183,7 +1183,7 @@ void paxassign::heuristic_assignments(
                  "ls_obj\n";
   }
 
-  std::string time_f_name = "heur_eval/heur_eval_times_75.csv";
+  std::string time_f_name = "heur_eval/heur_eval_times_70.csv";
   bool time_f_existed = std::filesystem::exists(time_f_name);
   std::ofstream time_stats(time_f_name, std::ios_base::app);
   if (!time_f_existed) {
@@ -1192,7 +1192,7 @@ void paxassign::heuristic_assignments(
                   "time,delay_order_greedy_time,ls_time\n";
   }
 
-  std::string solution_compar_f_name = "heur_eval/solutions_comp_75.csv";
+  std::string solution_compar_f_name = "heur_eval/solutions_comp_70.csv";
   bool solution_compar_f_existed =
       std::filesystem::exists(solution_compar_f_name);
   std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
@@ -1203,7 +1203,7 @@ void paxassign::heuristic_assignments(
                         "inchs,ls_exit_diff,ls_inchs\n";
   }
 
-  std::string loads_f_name = "heur_eval/loads_75.csv";
+  std::string loads_f_name = "heur_eval/loads_70.csv";
   std::ofstream loads(loads_f_name, std::ios_base::app);
 
   obj_stats << unique_key << "," << group_size << ",";
