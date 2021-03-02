@@ -1171,7 +1171,6 @@ void paxassign::heuristic_assignments(
     group_size += cg.second.size();
   }
 
-  if (group_size != 45) return;
   std::cout << "Groups in scenario: " << group_size << std::endl;
 
   std::time_t unique_key = std::time(nullptr);
