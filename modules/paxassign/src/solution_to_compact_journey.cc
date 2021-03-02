@@ -79,6 +79,11 @@ node_arc_solution_to_compact_j(
       }
     }
 
+    if (curr_trip == nullptr || from_e == nullptr || to_e == nullptr) {
+      result.push_back(
+          {eg_psg_groups[i].cpg_, motis::paxmon::compact_journey{}});
+      continue;
+    }
     if (first_trip) {
       std::cout << "22" << std::endl;
       first_trip = false;
