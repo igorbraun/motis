@@ -17,22 +17,28 @@ node_arc_solution_to_compact_j(
     std::vector<std::vector<eg_edge*>> const& na_solution,
     schedule const& sched) {
   std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>> result;
+  std::cout << "11" << std::endl;
   for (auto i = 0u; i < na_solution.size(); ++i) {
+    std::cout << "12" << std::endl;
     auto no_route_edge = std::find_if(
         na_solution[i].begin(), na_solution[i].end(),
         [](eg_edge* e) { return e->type_ == eg_edge_type::NO_ROUTE; });
+    std::cout << "13" << std::endl;
     if (no_route_edge != na_solution[i].end()) {
+      std::cout << "14" << std::endl;
       result.push_back(
           {eg_psg_groups[i].cpg_, motis::paxmon::compact_journey{}});
+      std::cout << "15" << std::endl;
       continue;
     }
 
+    std::cout << "16" << std::endl;
     std::vector<eg_edge*> trip_edges = utl::all(na_solution[i]) |
                                        utl::remove_if([&](auto const& e) {
                                          return e->type_ != eg_edge_type::TRIP;
                                        }) |
                                        utl::vec();
-
+    std::cout << "17" << std::endl;
     motis::paxmon::compact_journey cj{};
 
     bool first_trip = true;
@@ -44,12 +50,15 @@ node_arc_solution_to_compact_j(
         if (curr_trip != nullptr) {
           // add leg
           if (first_trip) {
+            std::cout << "18" << std::endl;
             first_trip = false;
             cj.legs_.emplace_back(motis::paxmon::journey_leg{
                 curr_trip, from_e->from_->station_, to_e->to_->station_,
                 from_e->from_->time_, to_e->to_->time_,
                 motis::paxmon::transfer_info{}});
+            std::cout << "19" << std::endl;
           } else {
+            std::cout << "20" << std::endl;
             cj.legs_.emplace_back(motis::paxmon::journey_leg{
                 curr_trip,
                 from_e->from_->station_,
@@ -59,6 +68,7 @@ node_arc_solution_to_compact_j(
                 motis::paxmon::util::get_transfer_info(
                     sched, from_e->from_->station_, to_e->to_->station_),
             });
+            std::cout << "21" << std::endl;
           }
         }
         curr_trip = e->trip_;
@@ -70,12 +80,15 @@ node_arc_solution_to_compact_j(
     }
 
     if (first_trip) {
+      std::cout << "22" << std::endl;
       first_trip = false;
       cj.legs_.emplace_back(motis::paxmon::journey_leg{
           curr_trip, from_e->from_->station_, to_e->to_->station_,
           from_e->from_->time_, to_e->to_->time_,
           motis::paxmon::transfer_info{}});
+      std::cout << "23" << std::endl;
     } else {
+      std::cout << "24" << std::endl;
       cj.legs_.emplace_back(motis::paxmon::journey_leg{
           curr_trip,
           from_e->from_->station_,
@@ -85,11 +98,12 @@ node_arc_solution_to_compact_j(
           motis::paxmon::util::get_transfer_info(sched, from_e->from_->station_,
                                                  to_e->to_->station_),
       });
+      std::cout << "25" << std::endl;
     }
 
     result.push_back({eg_psg_groups[i].cpg_, cj});
   }
-
+  std::cout << "26" << std::endl;
   return result;
 }
 }  // namespace motis::paxassign
