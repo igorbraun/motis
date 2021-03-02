@@ -1174,35 +1174,35 @@ void paxassign::heuristic_assignments(
 
   std::time_t unique_key = std::time(nullptr);
 
-  std::string obj_f_name = "heur_eval/heur_eval_objs_90.csv";
+  std::string obj_f_name = "heur_eval/heur_eval_objs_100000.csv";
   bool obj_f_existed = std::filesystem::exists(obj_f_name);
   std::ofstream obj_stats(obj_f_name, std::ios_base::app);
   if (!obj_f_existed) {
-    obj_stats << "ts,gr_size,AP_obj,NA_obj,greedy_obj,load_based,delay_based,"
+    obj_stats << "ts,gr_size,AP_obj,greedy_obj,load_based,delay_based,"
                  "ls_obj\n";
   }
 
-  std::string time_f_name = "heur_eval/heur_eval_times_90.csv";
+  std::string time_f_name = "heur_eval/heur_eval_times_100000.csv";
   bool time_f_existed = std::filesystem::exists(time_f_name);
   std::ofstream time_stats(time_f_name, std::ios_base::app);
   if (!time_f_existed) {
-    time_stats << "ts,AP_time,adding_to_graph_time,filtering_time,NA_time,"
+    time_stats << "ts,AP_time,adding_to_graph_time,filtering_time,"
                   "greedy_time,finding_probl_groups_time,load_order_greedy_"
                   "time,delay_order_greedy_time,ls_time\n";
   }
 
-  std::string solution_compar_f_name = "heur_eval/solutions_comp_90.csv";
+  std::string solution_compar_f_name = "heur_eval/solutions_comp_100000.csv";
   bool solution_compar_f_existed =
       std::filesystem::exists(solution_compar_f_name);
   std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
   if (!solution_compar_f_existed) {
-    solutions_compar << "ts,na_exit_diff,na_inchs,halle_exit_diff,halle_inchs,"
+    solutions_compar << "ts,halle_exit_diff,halle_inchs,"
                         "greedy_exit_diff,greedy_inchs,load_greedy_exit_diff,"
                         "load_greedy_inchs,delay_greedy_exit_diff,delay_greedy_"
                         "inchs,ls_exit_diff,ls_inchs\n";
   }
 
-  std::string loads_f_name = "heur_eval/loads_90.csv";
+  std::string loads_f_name = "heur_eval/loads_100000.csv";
   std::ofstream loads(loads_f_name, std::ios_base::app);
 
   obj_stats << unique_key << "," << group_size << ",";
@@ -1248,6 +1248,7 @@ void paxassign::heuristic_assignments(
 
   // NODE-ARC
   node_arc_config na_config{1.2, 30, 6, 10000};
+  /*
   double na_gurobi_obj;
   start = std::chrono::steady_clock::now();
   auto solution =
@@ -1261,6 +1262,7 @@ void paxassign::heuristic_assignments(
 
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
+  */
   // END NODE-ARC
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
@@ -1372,6 +1374,7 @@ void paxassign::heuristic_assignments(
                               .exit_time_;
 
       // NODE-ARC
+      /*
       auto na_sol = std::find_if(
           cpg_to_cj_node_arc.begin(), cpg_to_cj_node_arc.end(),
           [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
@@ -1387,6 +1390,7 @@ void paxassign::heuristic_assignments(
         auto na_interchanges = na_sol->second.legs_.size() - 1;
         solutions_compar << na_interchanges << ",";
       }
+       */
 
       // HALLE
       auto halle_sol = std::find_if(
@@ -1477,9 +1481,11 @@ void paxassign::heuristic_assignments(
 
   auto halle_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_halle, te_graph, sched);
+  /*
   auto node_arc_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_node_arc, te_graph, sched);
-  auto greedy_affected_edges =
+  */
+   auto greedy_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_greedy, te_graph, sched);
   auto LO_greedy_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_LO_greedy, te_graph, sched);
@@ -1490,7 +1496,7 @@ void paxassign::heuristic_assignments(
 
   std::set<eg_edge*> all_affected_edges;
   add_affected_edges_from_sol(halle_affected_edges, all_affected_edges);
-  add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);
+  /*add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);*/
   add_affected_edges_from_sol(greedy_affected_edges, all_affected_edges);
   add_affected_edges_from_sol(LO_greedy_affected_edges, all_affected_edges);
   add_affected_edges_from_sol(DO_greedy_affected_edges, all_affected_edges);
@@ -1505,6 +1511,7 @@ void paxassign::heuristic_assignments(
   }
   loads << "\n";
 
+  /*
   auto node_arc_resulting_load = get_final_edges_load_for_solution(
       all_affected_edges, node_arc_affected_edges);
   auto rel_node_arc_loads = get_relative_loads(node_arc_resulting_load);
@@ -1513,6 +1520,7 @@ void paxassign::heuristic_assignments(
     loads << "," << l;
   }
   loads << "\n";
+*/
 
   auto greedy_resulting_load = get_final_edges_load_for_solution(
       all_affected_edges, greedy_affected_edges);
