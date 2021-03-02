@@ -33,7 +33,8 @@ void print_solution_routes_halle(
                      [&assignment](cap_ILP_psg_group const& curr_gr) {
                        return curr_gr.id_ == assignment.first;
                      });
-    assert(cpg != cap_ilp_psg_groups.end());
+    utl::verify(cpg != cap_ilp_psg_groups.end(),
+                "print solution halle: route not found");
 
     if (cpg->alternatives_[assignment.second].edges_[0]->type_ ==
         edge_type::NOROUTE) {

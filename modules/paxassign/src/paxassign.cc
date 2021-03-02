@@ -545,7 +545,8 @@ paxassign::cap_ilp_assignment(
           [&cpg](std::pair<std::uint16_t, std::uint16_t> const& p) {
             return p.first == cpg.id_;
           });
-      assert(asg != sol.alt_to_use_.end());
+      utl::verify(asg != sol.alt_to_use_.end(),
+                  "cap_ilp_assignment: alternative to use not found");
       if (cpg.alternatives_.size() == asg->second) {
         // NO ROUTE found
         cpg_id_to_comp_jrn.push_back({cpg, motis::paxmon::compact_journey{}});

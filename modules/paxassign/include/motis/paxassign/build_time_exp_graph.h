@@ -295,7 +295,8 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
     if (tr_data == te_graph.trip_data_.end()) {
       std::cout << "End 1" << std::endl;
     }
-    assert(tr_data != te_graph.trip_data_.end());
+    utl::verify(tr_data != te_graph.trip_data_.end(),
+                "get_localization_node: trip data not found");
     auto at_edge = std::find_if(
         std::begin(tr_data->second->edges_), std::end(tr_data->second->edges_),
         [&cpg](eg_edge* e_ptr) {
@@ -313,7 +314,8 @@ eg_event_node* get_localization_node(combined_pg const& cpg,
                   << std::endl;
       }
     }
-    assert(at_edge != tr_data->second->edges_.end());
+    utl::verify(at_edge != tr_data->second->edges_.end(),
+                "get_localization_node: localization edge not found");
     return (*at_edge)->to_;
   } else {
     // CASE II: Passenger at station, either before journey or at interchange
