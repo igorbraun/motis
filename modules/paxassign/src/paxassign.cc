@@ -1476,7 +1476,7 @@ void paxassign::heuristic_assignments(
         throw std::runtime_error("didn't find LS solution");
       }
       if (LS_sol->second.legs_.empty()) {
-        solutions_compar << "-,-,";
+        solutions_compar << "-,-\n";
       } else {
         auto LS_exit = LS_sol->second.legs_.back().exit_time_;
         solutions_compar << (int)LS_exit - planned_exit << ",";
