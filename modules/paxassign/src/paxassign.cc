@@ -1175,35 +1175,35 @@ void paxassign::heuristic_assignments(
 
   std::time_t unique_key = std::time(nullptr);
 
-  std::string obj_f_name = "heur_eval/heur_eval_objs_90.csv";
+  std::string obj_f_name = "heur_eval/heur_eval_objs_150.csv";
   bool obj_f_existed = std::filesystem::exists(obj_f_name);
   std::ofstream obj_stats(obj_f_name, std::ios_base::app);
   if (!obj_f_existed) {
-    obj_stats << "ts,gr_size,AP_obj,NA_obj,greedy_obj,load_based,delay_based,"
+    obj_stats << "ts,gr_size,AP_obj,greedy_obj,load_based,delay_based,"
                  "ls_obj\n";
   }
 
-  std::string time_f_name = "heur_eval/heur_eval_times_90.csv";
+  std::string time_f_name = "heur_eval/heur_eval_times_150.csv";
   bool time_f_existed = std::filesystem::exists(time_f_name);
   std::ofstream time_stats(time_f_name, std::ios_base::app);
   if (!time_f_existed) {
-    time_stats << "ts,AP_time,adding_to_graph_time,filtering_time,NA_time,"
+    time_stats << "ts,AP_time,adding_to_graph_time,filtering_time,"
                   "greedy_time,finding_probl_groups_time,load_order_greedy_"
                   "time,delay_order_greedy_time,ls_time\n";
   }
 
-  std::string solution_compar_f_name = "heur_eval/solutions_comp_90.csv";
+  std::string solution_compar_f_name = "heur_eval/solutions_comp_150.csv";
   bool solution_compar_f_existed =
       std::filesystem::exists(solution_compar_f_name);
   std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
   if (!solution_compar_f_existed) {
-    solutions_compar << "ts,na_exit_diff,na_inchs,halle_exit_diff,halle_inchs,"
+    solutions_compar << "ts,halle_exit_diff,halle_inchs,"
                         "greedy_exit_diff,greedy_inchs,load_greedy_exit_diff,"
                         "load_greedy_inchs,delay_greedy_exit_diff,delay_greedy_"
                         "inchs,ls_exit_diff,ls_inchs\n";
   }
 
-  std::string loads_f_name = "heur_eval/loads_90.csv";
+  std::string loads_f_name = "heur_eval/loads_150.csv";
   std::ofstream loads(loads_f_name, std::ios_base::app);
 
   obj_stats << unique_key << "," << group_size << ",";
@@ -1249,7 +1249,8 @@ void paxassign::heuristic_assignments(
 
   // NODE-ARC
   node_arc_config na_config{1.2, 30, 6, 10000};
-  double na_gurobi_obj;
+
+  /*double na_gurobi_obj;
   start = std::chrono::steady_clock::now();
   auto solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
@@ -1264,6 +1265,7 @@ void paxassign::heuristic_assignments(
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
   std::cout << "2" << std::endl;
+  */
   // END NODE-ARC
 
   // NOT AS IT IS IN HALLE PAPER FOR INITIALIZATION WITH GREEDY
@@ -1382,6 +1384,7 @@ void paxassign::heuristic_assignments(
                               ->compact_planned_journey_.legs_.back()
                               .exit_time_;
 
+      /*
       // NODE-ARC
       auto na_sol = std::find_if(
           cpg_to_cj_node_arc.begin(), cpg_to_cj_node_arc.end(),
@@ -1398,6 +1401,7 @@ void paxassign::heuristic_assignments(
         auto na_interchanges = na_sol->second.legs_.size() - 1;
         solutions_compar << na_interchanges << ",";
       }
+      */
 
       // HALLE
       auto halle_sol = std::find_if(
