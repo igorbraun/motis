@@ -1256,7 +1256,6 @@ void paxassign::heuristic_assignments(
   auto solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
                    perc_tt_config, sched, na_gurobi_obj, obj_stats);
-  std::cout << "1" << std::endl;
   end = std::chrono::steady_clock::now();
   auto NA_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1265,7 +1264,6 @@ void paxassign::heuristic_assignments(
 
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, solution, sched);
-  std::cout << "2" << std::endl;
   */
   // END NODE-ARC
 
@@ -1292,7 +1290,6 @@ void paxassign::heuristic_assignments(
   auto rng = std::mt19937{};
   // Start solution for local search. calc_perc_tt_dist is used
   start = std::chrono::steady_clock::now();
-  std::cout << "3" << std::endl;
   auto greedy_solution = greedy_assignment(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, rng, calc_perc_tt_dist);
@@ -1301,22 +1298,18 @@ void paxassign::heuristic_assignments(
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
   time_stats << greedy_time << ",";
-  std::cout << "4" << std::endl;
   double greedy_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, greedy_solution, perc_tt_config);
 
   std::cout << "manually GREEDY CUMULATIVE: " << greedy_obj << std::endl;
   obj_stats << greedy_obj << ",";
-  std::cout << "5" << std::endl;
   auto cpg_to_cj_greedy =
       node_arc_solution_to_compact_j(eg_psg_groups, greedy_solution, sched);
-  std::cout << "6" << std::endl;
   std::vector<int> load_based_order;
   std::vector<int> delay_based_order;
   start = std::chrono::steady_clock::now();
   find_problematic_groups(eg_psg_groups, greedy_solution, load_based_order,
                           delay_based_order);
-  std::cout << "7" << std::endl;
   end = std::chrono::steady_clock::now();
   auto finding_probl_groups_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1324,7 +1317,6 @@ void paxassign::heuristic_assignments(
   time_stats << finding_probl_groups_time << ",";
 
   start = std::chrono::steady_clock::now();
-  std::cout << "8" << std::endl;
   auto load_order_solution = greedy_assignment_spec_order(
       te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
       eg_psg_groups, load_based_order, calc_perc_tt_dist);
@@ -1333,12 +1325,10 @@ void paxassign::heuristic_assignments(
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
   time_stats << load_order_greedy_time << ",";
-  std::cout << "9" << std::endl;
   auto cpg_to_cj_LO_greedy =
       node_arc_solution_to_compact_j(eg_psg_groups, load_order_solution, sched);
   double load_order_obj = piecewise_linear_convex_perceived_tt_node_arc(
       eg_psg_groups, load_order_solution, perc_tt_config);
-  std::cout << "10" << std::endl;
   std::cout << "load_order_obj GREEDY CUMULATIVE: " << load_order_obj
             << std::endl;
   obj_stats << load_order_obj << ",";
