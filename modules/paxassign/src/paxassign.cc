@@ -1492,8 +1492,10 @@ void paxassign::heuristic_assignments(
 
   auto halle_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_halle, te_graph, sched);
+  /*
   auto node_arc_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_node_arc, te_graph, sched);
+  */
   auto greedy_affected_edges =
       get_edges_load_from_solutions(cpg_to_cj_greedy, te_graph, sched);
   auto LO_greedy_affected_edges =
@@ -1505,7 +1507,9 @@ void paxassign::heuristic_assignments(
 
   std::set<eg_edge*> all_affected_edges;
   add_affected_edges_from_sol(halle_affected_edges, all_affected_edges);
+  /*
   add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);
+  */
   add_affected_edges_from_sol(greedy_affected_edges, all_affected_edges);
   add_affected_edges_from_sol(LO_greedy_affected_edges, all_affected_edges);
   add_affected_edges_from_sol(DO_greedy_affected_edges, all_affected_edges);
@@ -1520,6 +1524,7 @@ void paxassign::heuristic_assignments(
   }
   loads << "\n";
 
+  /*
   auto node_arc_resulting_load = get_final_edges_load_for_solution(
       all_affected_edges, node_arc_affected_edges);
   auto rel_node_arc_loads = get_relative_loads(node_arc_resulting_load);
@@ -1528,6 +1533,7 @@ void paxassign::heuristic_assignments(
     loads << "," << l;
   }
   loads << "\n";
+   */
 
   auto greedy_resulting_load = get_final_edges_load_for_solution(
       all_affected_edges, greedy_affected_edges);
