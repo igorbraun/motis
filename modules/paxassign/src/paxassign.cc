@@ -119,7 +119,6 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
-  if (group_size != 117) return;
 
   // std::ofstream group_stats("groups_stat_all.csv", std::ios_base::app);
   // group_stats << group_size << "\n";
