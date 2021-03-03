@@ -119,6 +119,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   for (auto const& cg : combined_groups) {
     group_size += cg.second.size();
   }
+  if (group_size != 117) return;
 
   // std::ofstream group_stats("groups_stat_all.csv", std::ios_base::app);
   // group_stats << group_size << "\n";
@@ -546,7 +547,7 @@ paxassign::cap_ilp_assignment(
             return p.first == cpg.id_;
           });
       utl::verify(asg != sol.alt_to_use_.end(),
-                  "cap_ilp_assignment: alternative to use not found");
+                  "cap_ilp_assignment: passenger ID not found");
       if (cpg.alternatives_.size() == asg->second) {
         // NO ROUTE found
         cpg_id_to_comp_jrn.push_back({cpg, motis::paxmon::compact_journey{}});
