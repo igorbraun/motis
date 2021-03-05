@@ -165,8 +165,7 @@ std::vector<std::vector<eg_edge*>> local_search(
     std::vector<std::vector<eg_edge*>> const& start_solution,
     perceived_tt_config const& config, uint8_t const max_steps,
     std::mt19937& rng, time_expanded_graph const& te_graph,
-    std::vector<std::vector<bool>> const& nodes_validity,
-    int const max_interchanges, F obj_f) {
+    int const max_interchanges, uint16_t const allowed_delay, F obj_f) {
 
   // General description of the local search approach:
   // 1. Randomly choose a group G from the scenario. Take its connection C
@@ -201,6 +200,9 @@ std::vector<std::vector<eg_edge*>> local_search(
   for (auto i = 0u; i < max_iterations; ++i) {
     // Step 1
     auto gr_idx = groups_distr(rng);
+    time latest_time =
+        eg_psg_groups[gr_idx].cpg_.groups_.back()->planned_arrival_time_ +
+        allowed_delay;
     // Step 2
     int edge_idx = (int)((solution[gr_idx].size() - 1) * stops_distr(rng));
     // Step 3
@@ -213,13 +215,13 @@ std::vector<std::vector<eg_edge*>> local_search(
       ++handled_nodes;
       auto route_part_one = sssd_dijkstra<double>(
           eg_psg_groups[gr_idx].from_, n, eg_psg_groups[gr_idx].psg_count_, 0.0,
-          std::numeric_limits<double>::max(), te_graph, nodes_validity[gr_idx],
-          max_interchanges, obj_f);
+          std::numeric_limits<double>::max(), te_graph, max_interchanges,
+          latest_time, obj_f);
       if (route_part_one.empty()) continue;
       auto route_part_two = sssd_dijkstra<double>(
           n, eg_psg_groups[gr_idx].to_, eg_psg_groups[gr_idx].psg_count_, 0.0,
-          std::numeric_limits<double>::max(), te_graph, nodes_validity[gr_idx],
-          max_interchanges, obj_f);
+          std::numeric_limits<double>::max(), te_graph, max_interchanges,
+          latest_time, obj_f);
       if (route_part_two.empty()) continue;
       route_part_one.insert(route_part_one.end(), route_part_two.begin(),
                             route_part_two.end());

@@ -1233,12 +1233,14 @@ void paxassign::heuristic_assignments(
           .count();
   time_stats << adding_to_graph_time << ",";
 
-  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  // std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   start = std::chrono::steady_clock::now();
+  /*
   for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
-    nodes_validity[i] =
-        reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
+    nodes_validity[i] = std::vector<bool>(te_graph.nodes_.size(), true);
+    // reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
+  */
   end = std::chrono::steady_clock::now();
   auto filtering_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1290,8 +1292,8 @@ void paxassign::heuristic_assignments(
   // Start solution for local search. calc_perc_tt_dist is used
   start = std::chrono::steady_clock::now();
   auto greedy_solution = greedy_assignment(
-      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
-      eg_psg_groups, rng, calc_perc_tt_dist);
+      te_graph, eg_config.max_allowed_interchanges_,
+      reduction_config.allowed_delay_, eg_psg_groups, rng, calc_perc_tt_dist);
   end = std::chrono::steady_clock::now();
   auto greedy_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1317,8 +1319,9 @@ void paxassign::heuristic_assignments(
 
   start = std::chrono::steady_clock::now();
   auto load_order_solution = greedy_assignment_spec_order(
-      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
-      eg_psg_groups, load_based_order, calc_perc_tt_dist);
+      te_graph, eg_config.max_allowed_interchanges_,
+      reduction_config.allowed_delay_, eg_psg_groups, load_based_order,
+      calc_perc_tt_dist);
   end = std::chrono::steady_clock::now();
   auto load_order_greedy_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1334,8 +1337,9 @@ void paxassign::heuristic_assignments(
 
   start = std::chrono::steady_clock::now();
   auto delay_order_solution = greedy_assignment_spec_order(
-      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
-      eg_psg_groups, delay_based_order, calc_perc_tt_dist);
+      te_graph, eg_config.max_allowed_interchanges_,
+      reduction_config.allowed_delay_, eg_psg_groups, delay_based_order,
+      calc_perc_tt_dist);
   end = std::chrono::steady_clock::now();
   auto delay_order_greedy_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1350,9 +1354,10 @@ void paxassign::heuristic_assignments(
       eg_psg_groups, delay_order_solution, sched);
 
   start = std::chrono::steady_clock::now();
-  auto ls_solution = local_search(
-      eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
-      nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
+  auto ls_solution =
+      local_search(eg_psg_groups, greedy_solution, perc_tt_config, 3, rng,
+                   te_graph, eg_config.max_allowed_interchanges_,
+                   reduction_config.allowed_delay_, calc_perc_tt_dist);
   end = std::chrono::steady_clock::now();
   auto ls_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
