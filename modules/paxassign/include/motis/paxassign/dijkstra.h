@@ -142,7 +142,7 @@ std::vector<eg_edge*> sssd_dijkstra(eg_event_node* from, eg_event_node* to,
                                   ? curr_interchanges + 1
                                   : curr_interchanges;
       if (new_interchanges > max_interchanges) continue;
-      if (oe->to_->id != to->id_ && oe->to_->time_ > latest_time) continue;
+      if (oe->to_->id_ != to->id_ && oe->to_->time_ > latest_time) continue;
       auto new_dist = calc_new_dist(oe.get(), curr_dist);
       if (new_dist < dist[oe->to_->id_]) {
         dist[oe->to_->id_] = new_dist;
