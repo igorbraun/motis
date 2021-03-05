@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iosfwd>
 #include <iostream>
+#include <thread>
 
 #include "motis/core/common/date_time_util.h"
 #include "motis/core/common/logging.h"
@@ -37,6 +38,8 @@
 #include "motis/paxassign/service_functions.h"
 #include "motis/paxassign/service_time_exp_graph.h"
 #include "motis/paxassign/solution_to_compact_journey.h"
+
+#include "motis/module/context/motis_parallel_for.h"
 
 #include "motis/paxassign/build_toy_scenario.h"
 #include "../../../build/rel/generated/motis/protocol/Message_generated.h"
@@ -1233,14 +1236,19 @@ void paxassign::heuristic_assignments(
           .count();
   time_stats << adding_to_graph_time << ",";
 
-  // std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
   start = std::chrono::steady_clock::now();
-  /*
-  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  for (auto i = 0u; i < nodes_validity.size(); ++i) {
     nodes_validity[i] = std::vector<bool>(te_graph.nodes_.size(), true);
-    // reduce_te_graph(eg_psg_groups[i], te_graph, reduction_config, sched);
   }
-  */
+  std::vector<std::pair<int, eg_psg_group const&>> ranges;
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    ranges.emplace_back(i, eg_psg_groups[i]);
+  }
+  motis_parallel_for(ranges, [&](auto const& i_to_psg_group) {
+    parallel_reduce_te_graph(i_to_psg_group.second, te_graph, reduction_config,
+                             sched, nodes_validity[i_to_psg_group.first]);
+  });
   end = std::chrono::steady_clock::now();
   auto filtering_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1291,9 +1299,11 @@ void paxassign::heuristic_assignments(
   auto rng = std::mt19937{};
   // Start solution for local search. calc_perc_tt_dist is used
   start = std::chrono::steady_clock::now();
+
   auto greedy_solution = greedy_assignment(
-      te_graph, eg_config.max_allowed_interchanges_,
-      reduction_config.allowed_delay_, eg_psg_groups, rng, calc_perc_tt_dist);
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, rng, calc_perc_tt_dist);
+
   end = std::chrono::steady_clock::now();
   auto greedy_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1318,10 +1328,11 @@ void paxassign::heuristic_assignments(
   time_stats << finding_probl_groups_time << ",";
 
   start = std::chrono::steady_clock::now();
+
   auto load_order_solution = greedy_assignment_spec_order(
-      te_graph, eg_config.max_allowed_interchanges_,
-      reduction_config.allowed_delay_, eg_psg_groups, load_based_order,
-      calc_perc_tt_dist);
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, load_based_order, calc_perc_tt_dist);
+
   end = std::chrono::steady_clock::now();
   auto load_order_greedy_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1354,10 +1365,11 @@ void paxassign::heuristic_assignments(
       eg_psg_groups, delay_order_solution, sched);
 
   start = std::chrono::steady_clock::now();
-  auto ls_solution =
-      local_search(eg_psg_groups, greedy_solution, perc_tt_config, 3, rng,
-                   te_graph, eg_config.max_allowed_interchanges_,
-                   reduction_config.allowed_delay_, calc_perc_tt_dist);
+
+  auto ls_solution = local_search(
+      eg_psg_groups, greedy_solution, perc_tt_config, 3, rng, te_graph,
+      nodes_validity, eg_config.max_allowed_interchanges_, calc_perc_tt_dist);
+
   end = std::chrono::steady_clock::now();
   auto ls_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
