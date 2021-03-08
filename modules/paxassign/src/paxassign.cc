@@ -1722,7 +1722,7 @@ void paxassign::transport_class_filter(
   if (!scenario_stats_f_existed) {
     scenario_stats << "ts,groups,no_tf_building_time,no_tf_opt_time,no_tf_na_"
                       "obj,overall_transport_class_filter"
-                      "tf_building_time,tf_opt_time,tf_na_obj\n";
+                      "tf_building_time,tf_opt_time,tf_na_obj,dummy\n";
   }
   scenario_stats << unique_key << ",";
   scenario_stats << group_size << ",";
@@ -1766,9 +1766,9 @@ void paxassign::transport_class_filter(
 
   auto start = std::chrono::steady_clock::now();
   motis_parallel_for(ranges, [&](auto const& i_to_psg_group) {
-    parallel_transport_category_filter(i_to_psg_group.second, te_graph,
-                                       reduction_config, sched,
-                                       nodes_validity[i_to_psg_group.first]);
+    parallel_transport_category_filter(
+        i_to_psg_group.second, te_graph, reduction_config, sched,
+        nodes_validity_copy[i_to_psg_group.first]);
   });
   auto end = std::chrono::steady_clock::now();
   auto parallel_time =
@@ -1779,6 +1779,7 @@ void paxassign::transport_class_filter(
   auto tf_solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
                    perc_tt_config, sched, na_gurobi_obj, scenario_stats);
+  scenario_stats << "END\n";
 
   auto cpg_to_cj_node_arc =
       node_arc_solution_to_compact_j(eg_psg_groups, no_tf_solution, sched);
