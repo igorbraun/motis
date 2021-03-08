@@ -193,7 +193,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
   // node_arc_ilp_assignment(combined_groups, data, sched);
-  delay_order_time(combined_groups, data, sched);
+  transport_class_filter(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -1680,6 +1680,197 @@ void paxassign::delay_order_time(
   time_stats << delay_based_time << "\n";
 
   time_stats.close();
+}
+
+void paxassign::transport_class_filter(
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+    paxmon_data& data, const schedule& sched) {
+  node_arc_config eg_config{1.2, 30, 6, 10000};
+  auto te_graph = build_time_expanded_graph(data, sched, eg_config);
+
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      if (!cgs.second[cpg_ind].localization_.in_trip()) {
+        ++cpg_ind;
+        continue;
+      }
+      auto tr_data = te_graph.trip_data_.find(
+          to_extern_trip(sched, cgs.second[cpg_ind].localization_.in_trip_));
+      if (tr_data == te_graph.trip_data_.end()) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
+
+  int group_size = 0;
+  for (auto const& cg : combined_groups) {
+    group_size += cg.second.size();
+  }
+
+  std::time_t unique_key = std::time(nullptr);
+
+  std::string scenario_stats_f_name = "transp_classes/trans_class_stats.csv";
+  bool scenario_stats_f_existed =
+      std::filesystem::exists(scenario_stats_f_name);
+  std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
+  if (!scenario_stats_f_existed) {
+    scenario_stats << "ts,groups,no_tf_building_time,no_tf_opt_time,no_tf_na_"
+                      "obj,overall_transport_class_filter"
+                      "tf_building_time,tf_opt_time,tf_na_obj\n";
+  }
+  scenario_stats << unique_key << ",";
+  scenario_stats << group_size << ",";
+
+  std::string trans_class_times_f_name =
+      "transp_classes/trans_class_filter.csv";
+  bool trans_class_times_f_existed =
+      std::filesystem::exists(trans_class_times_f_name);
+  std::ofstream trans_class_times(trans_class_times_f_name, std::ios_base::app);
+  if (!trans_class_times_f_existed) {
+    trans_class_times << "ts,nodes_before,nodes_after,tcf_overall_time\n";
+  }
+
+  config_graph_reduction reduction_config;
+  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  for (auto i = 0u; i < nodes_validity.size(); ++i) {
+    nodes_validity[i] = std::vector<bool>(te_graph.nodes_.size(), true);
+  }
+  std::vector<std::pair<int, eg_psg_group const&>> ranges;
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    ranges.emplace_back(i, eg_psg_groups[i]);
+  }
+
+  motis_parallel_for(ranges, [&](auto const& i_to_psg_group) {
+    parallel_reduce_te_graph(i_to_psg_group.second, te_graph, reduction_config,
+                             sched, nodes_validity[i_to_psg_group.first]);
+  });
+
+  perceived_tt_config perc_tt_config;
+  double na_gurobi_obj = 0;
+  auto no_tf_solution =
+      node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
+                   perc_tt_config, sched, na_gurobi_obj, scenario_stats);
+
+  std::vector<std::vector<bool>> nodes_validity_copy{nodes_validity};
+
+  for (auto i = 0u; i < nodes_validity.size(); ++i) {
+    transport_category_filter(eg_psg_groups[i], te_graph, reduction_config,
+                              sched, nodes_validity[i], trans_class_times);
+  }
+
+  auto start = std::chrono::steady_clock::now();
+  motis_parallel_for(ranges, [&](auto const& i_to_psg_group) {
+    parallel_transport_category_filter(i_to_psg_group.second, te_graph,
+                                       reduction_config, sched,
+                                       nodes_validity[i_to_psg_group.first]);
+  });
+  auto end = std::chrono::steady_clock::now();
+  auto parallel_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  trans_class_times << parallel_time << "\n";
+
+  auto tf_solution =
+      node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
+                   perc_tt_config, sched, na_gurobi_obj, scenario_stats);
+
+  auto cpg_to_cj_node_arc =
+      node_arc_solution_to_compact_j(eg_psg_groups, no_tf_solution, sched);
+  auto cpg_to_cj_node_arc_trans_class_filter =
+      node_arc_solution_to_compact_j(eg_psg_groups, tf_solution, sched);
+
+  std::string solution_compar_f_name = "transp_classes/solutions_comp.csv";
+  bool solution_compar_f_existed =
+      std::filesystem::exists(solution_compar_f_name);
+  std::ofstream solutions_compar(solution_compar_f_name, std::ios_base::app);
+  if (!solution_compar_f_existed) {
+    solutions_compar << "ts,no_tf_diff,no_tf_inchs,tf_diff,tf_inchs\n";
+  }
+
+  for (auto& cgs : combined_groups) {
+    for (auto& cpg : cgs.second) {
+      solutions_compar << unique_key << ",";
+      // PLANNED
+      auto planned_exit = (*cpg.groups_.begin())
+                              ->compact_planned_journey_.legs_.back()
+                              .exit_time_;
+      // NODE-ARC no transport classes
+      auto na_sol = std::find_if(
+          cpg_to_cj_node_arc.begin(), cpg_to_cj_node_arc.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (na_sol == cpg_to_cj_node_arc.end()) {
+        throw std::runtime_error("didn't find node-arc solution");
+      }
+      if (na_sol->second.legs_.empty()) {
+        solutions_compar << "-,-,";
+      } else {
+        auto na_exit = na_sol->second.legs_.back().exit_time_;
+        solutions_compar << (int)na_exit - planned_exit << ",";
+        auto na_interchanges = na_sol->second.legs_.size() - 1;
+        solutions_compar << na_interchanges << ",";
+      }
+
+      // NODE-ARC with transport classes
+      auto na_sol_tf = std::find_if(
+          cpg_to_cj_node_arc_trans_class_filter.begin(),
+          cpg_to_cj_node_arc_trans_class_filter.end(),
+          [&](std::pair<combined_pg&, motis::paxmon::compact_journey> const&
+                  p) { return p.first.id_ == cpg.id_; });
+      if (na_sol_tf == cpg_to_cj_node_arc_trans_class_filter.end()) {
+        throw std::runtime_error("didn't find node-arc solution");
+      }
+      if (na_sol_tf->second.legs_.empty()) {
+        solutions_compar << "-,-\n";
+      } else {
+        auto na_exit = na_sol_tf->second.legs_.back().exit_time_;
+        solutions_compar << (int)na_exit - planned_exit << ",";
+        auto na_interchanges = na_sol_tf->second.legs_.size() - 1;
+        solutions_compar << na_interchanges << "\n";
+      }
+    }
+  }
+
+  std::string loads_f_name = "transp_classes/loads.csv";
+  std::ofstream loads(loads_f_name, std::ios_base::app);
+
+  auto node_arc_affected_edges =
+      get_edges_load_from_solutions(cpg_to_cj_node_arc, te_graph, sched);
+  auto node_arc_affected_edges_tf = get_edges_load_from_solutions(
+      cpg_to_cj_node_arc_trans_class_filter, te_graph, sched);
+
+  std::set<eg_edge*> all_affected_edges;
+  add_affected_edges_from_sol(node_arc_affected_edges, all_affected_edges);
+  add_affected_edges_from_sol(node_arc_affected_edges_tf, all_affected_edges);
+
+  auto node_arc_resulting_load = get_final_edges_load_for_solution(
+      all_affected_edges, node_arc_affected_edges);
+  auto rel_node_arc_loads = get_relative_loads(node_arc_resulting_load);
+  loads << unique_key << ",na";
+  for (auto const l : rel_node_arc_loads) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  auto node_arc_resulting_load_tf = get_final_edges_load_for_solution(
+      all_affected_edges, node_arc_affected_edges_tf);
+  auto rel_node_arc_loads_tf = get_relative_loads(node_arc_resulting_load_tf);
+  loads << unique_key << ",na_tf";
+  for (auto const l : rel_node_arc_loads_tf) {
+    loads << "," << l;
+  }
+  loads << "\n";
+
+  scenario_stats.close();
+  trans_class_times.close();
+  solutions_compar.close();
+  loads.close();
 }
 
 }  // namespace motis::paxassign

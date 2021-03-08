@@ -208,11 +208,94 @@ std::vector<bool> reduce_te_graph(eg_psg_group const& psg_group,
   return nodes_validity;
 }
 
+void parallel_transport_category_filter(eg_psg_group const& psg_group,
+                                        time_expanded_graph const& te_graph,
+                                        config_graph_reduction const& config,
+                                        schedule const& sched,
+                                        std::vector<bool>& nodes_validity) {
+  // CLASSES FILTER, NEEDS RESULTS OF BOTH, FORWARD AND BACKWARD SEARCHES
+  {
+    logging::scoped_timer classes_filter{"classes filter"};
+    auto calc_dist_classes = [&](eg_edge* e, transport_category curr_cat) {
+      if (e->service_class_ == service_class::OTHER) return curr_cat;
+      auto e_class = config.class_to_cat_.at(e->service_class_);
+      if (curr_cat <= e_class) return e_class;
+      return transport_category::NO_TRANSPORT;
+    };
+    auto classes_forward_res = dijkstra<transport_category>(
+        dijkstra_type::FORWARD, psg_group.from_, transport_category::LOCAL,
+        transport_category::NO_TRANSPORT, te_graph, nodes_validity,
+        calc_dist_classes);
+    auto classes_backward_res = dijkstra<transport_category>(
+        dijkstra_type::BACKWARD, psg_group.to_, transport_category::LOCAL,
+        transport_category::NO_TRANSPORT, te_graph, nodes_validity,
+        calc_dist_classes);
+    std::vector<transport_category> classes_result;
+    std::transform(
+        classes_forward_res.begin(), classes_forward_res.end(),
+        classes_backward_res.begin(), std::back_inserter(classes_result),
+        [](transport_category const& lhs, transport_category const& rhs) {
+          return (lhs < rhs) ? lhs : rhs;
+        });
+    filter_nodes<transport_category>(nodes_validity, classes_result,
+                                     transport_category::LONG_DIST);
+  }
+}
+
+void transport_category_filter(eg_psg_group const& psg_group,
+                               time_expanded_graph const& te_graph,
+                               config_graph_reduction const& config,
+                               schedule const& sched,
+                               std::vector<bool>& nodes_validity,
+                               std::ofstream& reducing_stats) {
+  // CLASSES FILTER, NEEDS RESULTS OF BOTH, FORWARD AND BACKWARD SEARCHES
+  {
+    auto valid_count_before =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    auto start = std::chrono::steady_clock::now();
+    logging::scoped_timer classes_filter{"classes filter"};
+    auto calc_dist_classes = [&](eg_edge* e, transport_category curr_cat) {
+      if (e->service_class_ == service_class::OTHER) return curr_cat;
+      auto e_class = config.class_to_cat_.at(e->service_class_);
+      if (curr_cat <= e_class) return e_class;
+      return transport_category::NO_TRANSPORT;
+    };
+    auto classes_forward_res = dijkstra<transport_category>(
+        dijkstra_type::FORWARD, psg_group.from_, transport_category::LOCAL,
+        transport_category::NO_TRANSPORT, te_graph, nodes_validity,
+        calc_dist_classes);
+    auto classes_backward_res = dijkstra<transport_category>(
+        dijkstra_type::BACKWARD, psg_group.to_, transport_category::LOCAL,
+        transport_category::NO_TRANSPORT, te_graph, nodes_validity,
+        calc_dist_classes);
+    std::vector<transport_category> classes_result;
+    std::transform(
+        classes_forward_res.begin(), classes_forward_res.end(),
+        classes_backward_res.begin(), std::back_inserter(classes_result),
+        [](transport_category const& lhs, transport_category const& rhs) {
+          return (lhs < rhs) ? lhs : rhs;
+        });
+    filter_nodes<transport_category>(nodes_validity, classes_result,
+                                     transport_category::LONG_DIST);
+
+    auto end = std::chrono::steady_clock::now();
+    auto filter_time =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    auto valid_count =
+        std::accumulate(nodes_validity.begin(), nodes_validity.end(), 0);
+    std::cout << "result after classes filter: " << valid_count << " from "
+              << valid_count_before << std::endl;
+    reducing_stats << valid_count_before << "," << valid_count << ","
+                   << filter_time << ",";
+  }
+}
+
 void parallel_reduce_te_graph(eg_psg_group const& psg_group,
-                             time_expanded_graph const& te_graph,
-                             config_graph_reduction const& config,
-                             schedule const& sched,
-                             std::vector<bool>& nodes_validity) {
+                              time_expanded_graph const& te_graph,
+                              config_graph_reduction const& config,
+                              schedule const& sched,
+                              std::vector<bool>& nodes_validity) {
   // TIME FILTER
   {
     auto latest_allowed_time = std::min<uint16_t>(
@@ -316,7 +399,6 @@ void parallel_reduce_te_graph(eg_psg_group const& psg_group,
     std::cout << "result after classes filter: " << valid_count << " from "
               << te_graph.nodes_.size() << std::endl;
   }
-
 }
 
 void reduce_te_graph_time(eg_psg_group const& psg_group,

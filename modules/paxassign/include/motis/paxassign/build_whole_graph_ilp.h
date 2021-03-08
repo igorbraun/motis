@@ -270,7 +270,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     auto time_building_ILP =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
             .count();
-    // results_file << time_building_ILP << ",";
+    results_file << time_building_ILP << ",";
 
     model.optimize();
 
@@ -304,7 +304,7 @@ std::vector<std::vector<eg_edge*>> node_arc_ilp(
     std::cout << "TIME: " << model.get(GRB_DoubleAttr_Runtime) << std::endl;
     std::cout << "NUMVARS: " << model.get(GRB_IntAttr_NumVars) << std::endl;
 
-    obj_value = model.get(GRB_DoubleAttr_ObjVal);
+    results_file << model.get(GRB_DoubleAttr_Runtime) << ",";
     results_file << model.get(GRB_DoubleAttr_ObjVal) << ",";
     /*
     results_file << model.get(GRB_DoubleAttr_ObjVal) << ","

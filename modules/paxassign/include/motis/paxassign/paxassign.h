@@ -44,6 +44,9 @@ private:
   void delay_order_time(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, const schedule& sched);
+  void transport_class_filter(
+      std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+      paxmon_data& data, const schedule& sched);
   void filter_evaluation(
       std::map<unsigned, std::vector<combined_pg>>& combined_groups,
       paxmon_data& data, schedule const& sched);
