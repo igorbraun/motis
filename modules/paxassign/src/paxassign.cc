@@ -1775,7 +1775,7 @@ void paxassign::transport_class_filter(
   auto parallel_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
-  scenario_stats << parallel_time << "\n";
+  scenario_stats << parallel_time << ",";
 
   auto tf_solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
