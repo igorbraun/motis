@@ -287,7 +287,7 @@ void transport_category_filter(eg_psg_group const& psg_group,
     std::cout << "result after classes filter: " << valid_count << " from "
               << valid_count_before << std::endl;
     reducing_stats << valid_count_before << "," << valid_count << ","
-                   << filter_time << ",";
+                   << filter_time << "\n";
   }
 }
 
