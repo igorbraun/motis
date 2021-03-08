@@ -193,7 +193,7 @@ void paxassign::on_monitor(const motis::module::msg_ptr& msg) {
   //    variables_with_values;
   // cap_ilp_assignment(combined_groups, data, sched, variables_with_values);
   // node_arc_ilp_assignment(combined_groups, data, sched);
-  heuristic_assignments(combined_groups, data, sched);
+  delay_order_time(combined_groups, data, sched);
 }
 
 std::vector<std::pair<combined_pg&, motis::paxmon::compact_journey>>
@@ -1348,9 +1348,9 @@ void paxassign::heuristic_assignments(
 
   start = std::chrono::steady_clock::now();
   auto delay_order_solution = greedy_assignment_spec_order(
-      te_graph, eg_config.max_allowed_interchanges_,
-      reduction_config.allowed_delay_, eg_psg_groups, delay_based_order,
-      calc_perc_tt_dist);
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, delay_based_order, calc_perc_tt_dist);
+
   end = std::chrono::steady_clock::now();
   auto delay_order_greedy_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -1584,6 +1584,102 @@ void paxassign::heuristic_assignments(
   time_stats.close();
 
   // throw std::runtime_error("heuristic algorithms finished");
+}
+
+void paxassign::delay_order_time(
+    std::map<unsigned, std::vector<combined_pg>>& combined_groups,
+    paxmon_data& data, schedule const& sched) {
+  node_arc_config eg_config{1.2, 30, 6, 10000};
+  auto te_graph = build_time_expanded_graph(data, sched, eg_config);
+
+  for (auto& cgs : combined_groups) {
+    size_t cpg_ind = 0;
+    while (cpg_ind < cgs.second.size()) {
+      if (!cgs.second[cpg_ind].localization_.in_trip()) {
+        ++cpg_ind;
+        continue;
+      }
+      auto tr_data = te_graph.trip_data_.find(
+          to_extern_trip(sched, cgs.second[cpg_ind].localization_.in_trip_));
+      if (tr_data == te_graph.trip_data_.end()) {
+        cgs.second.erase(cgs.second.begin() + cpg_ind);
+      } else {
+        ++cpg_ind;
+      }
+    }
+  }
+  node_arc_config na_config{1.2, 30, 6, 10000};
+  auto eg_psg_groups =
+      add_psgs_to_te_graph(combined_groups, sched, na_config, te_graph);
+
+  int group_size = 0;
+  for (auto const& cg : combined_groups) {
+    group_size += cg.second.size();
+  }
+
+  std::string time_f_name = "heur_eval/delay_order_times.csv";
+  bool time_f_existed = std::filesystem::exists(time_f_name);
+  std::ofstream time_stats(time_f_name, std::ios_base::app);
+  if (!time_f_existed) {
+    time_stats << "gr_size,delay_order_greedy_time\n";
+  }
+  time_stats << group_size << ",";
+
+  config_graph_reduction reduction_config;
+  std::vector<std::vector<bool>> nodes_validity(eg_psg_groups.size());
+  for (auto i = 0u; i < nodes_validity.size(); ++i) {
+    nodes_validity[i] = std::vector<bool>(te_graph.nodes_.size(), true);
+  }
+  std::vector<std::pair<int, eg_psg_group const&>> ranges;
+  for (auto i = 0u; i < eg_psg_groups.size(); ++i) {
+    ranges.emplace_back(i, eg_psg_groups[i]);
+  }
+  motis_parallel_for(ranges, [&](auto const& i_to_psg_group) {
+    parallel_reduce_te_graph(i_to_psg_group.second, te_graph, reduction_config,
+                             sched, nodes_validity[i_to_psg_group.first]);
+  });
+
+  perceived_tt_config perc_tt_config;
+  auto calc_perc_tt_dist = [&](eg_edge* e, double curr_dist) {
+    if (e->capacity_utilization_ >
+        perc_tt_config.cost_function_capacity_steps_.back()) {
+      return std::numeric_limits<double>::max();
+    }
+    double transfer_penalty = (e->type_ == eg_edge_type::TRAIN_ENTRY)
+                                  ? perc_tt_config.transfer_penalty_
+                                  : 0.0;
+    auto const it =
+        std::lower_bound(perc_tt_config.cost_function_capacity_steps_.begin(),
+                         perc_tt_config.cost_function_capacity_steps_.end(),
+                         e->capacity_utilization_);
+    auto idx =
+        std::distance(perc_tt_config.cost_function_capacity_steps_.begin(), it);
+    return perc_tt_config.tt_and_waiting_penalties_[idx] * e->cost_ +
+           transfer_penalty + curr_dist;
+  };
+
+  auto rng = std::mt19937{};
+
+  auto greedy_solution = greedy_assignment(
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, rng, calc_perc_tt_dist);
+
+  std::vector<int> load_based_order;
+  std::vector<int> delay_based_order;
+
+  auto start = std::chrono::steady_clock::now();
+  find_problematic_groups(eg_psg_groups, greedy_solution, load_based_order,
+                          delay_based_order);
+  auto delay_based_sol = greedy_assignment_spec_order(
+      te_graph, nodes_validity, eg_config.max_allowed_interchanges_,
+      eg_psg_groups, delay_based_order, calc_perc_tt_dist);
+  auto end = std::chrono::steady_clock::now();
+  auto delay_based_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  time_stats << delay_based_time << "\n";
+
+  time_stats.close();
 }
 
 }  // namespace motis::paxassign
