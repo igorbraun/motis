@@ -1733,7 +1733,7 @@ void paxassign::transport_class_filter(
       std::filesystem::exists(trans_class_times_f_name);
   std::ofstream trans_class_times(trans_class_times_f_name, std::ios_base::app);
   if (!trans_class_times_f_existed) {
-    trans_class_times << "ts,nodes_before,nodes_after,tcf_overall_time\n";
+    trans_class_times << "ts,nodes_before,nodes_after,single_tcf_time\n";
   }
 
   config_graph_reduction reduction_config;
@@ -1760,6 +1760,7 @@ void paxassign::transport_class_filter(
   std::vector<std::vector<bool>> nodes_validity_copy{nodes_validity};
 
   for (auto i = 0u; i < nodes_validity.size(); ++i) {
+    trans_class_times << unique_key << ",";
     transport_category_filter(eg_psg_groups[i], te_graph, reduction_config,
                               sched, nodes_validity[i], trans_class_times);
   }
@@ -1774,7 +1775,7 @@ void paxassign::transport_class_filter(
   auto parallel_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
-  trans_class_times << parallel_time << "\n";
+  scenario_stats << parallel_time << "\n";
 
   auto tf_solution =
       node_arc_ilp(eg_psg_groups, nodes_validity, te_graph, na_config,
