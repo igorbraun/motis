@@ -1721,7 +1721,7 @@ void paxassign::transport_class_filter(
   std::ofstream scenario_stats(scenario_stats_f_name, std::ios_base::app);
   if (!scenario_stats_f_existed) {
     scenario_stats << "ts,groups,no_tf_building_time,no_tf_opt_time,no_tf_na_"
-                      "obj,overall_transport_class_filter"
+                      "obj,overall_transport_class_filter,"
                       "tf_building_time,tf_opt_time,tf_na_obj,dummy\n";
   }
   scenario_stats << unique_key << ",";
